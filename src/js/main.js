@@ -1,23 +1,17 @@
 import { dataService } from './dataService.js';
 import { renderOverview } from './components/overviewView.js';
 import { renderStudentDirectory } from './components/studentDirectory.js';
-import { renderSupportRadar } from './components/supportRadarView.js';
-import { renderEmployerAnalytics } from './components/employerAnalytics.js';
-import { renderSourceYield } from './components/sourceYieldView.js';
-import { renderCompensation } from './components/compensationView.js';
+import { renderReplicationGuide } from './components/replicationView.js';
 import { initFormModal } from './components/formModal.js';
 
 let activeTab = 'overview';
 
 function updateBadgeCounts(data) {
-  const studentCountEl = document.getElementById('tab-student-count');
-  if (studentCountEl) studentCountEl.textContent = data.totalStudents;
-
-  const supportBadgeEl = document.getElementById('tab-support-badge');
-  if (supportBadgeEl) {
+  const supportCountEl = document.getElementById('nav-support-count');
+  if (supportCountEl) {
     const count = data.flaggedStudents.length;
-    supportBadgeEl.textContent = count;
-    supportBadgeEl.style.display = count > 0 ? 'inline-block' : 'none';
+    supportCountEl.textContent = count;
+    supportCountEl.style.display = count > 0 ? 'inline-block' : 'none';
   }
 }
 
@@ -44,17 +38,8 @@ function renderActiveView() {
     case 'students':
       renderStudentDirectory(activePanel, data);
       break;
-    case 'support':
-      renderSupportRadar(activePanel, data);
-      break;
-    case 'employers':
-      renderEmployerAnalytics(activePanel, data);
-      break;
-    case 'sources':
-      renderSourceYield(activePanel, data);
-      break;
-    case 'compensation':
-      renderCompensation(activePanel, data);
+    case 'replication':
+      renderReplicationGuide(activePanel, data);
       break;
     default:
       renderOverview(activePanel, data);
@@ -86,12 +71,11 @@ async function startApp() {
   initFormModal();
   initNavigation();
 
-  // Load datasets
   try {
     await dataService.init();
     renderActiveView();
 
-    // Re-render automatically whenever new submissions are logged
+    // Re-render automatically on form submission or CSV import
     dataService.subscribe(() => {
       renderActiveView();
     });

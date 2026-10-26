@@ -253,48 +253,50 @@ class DataService {
         student.highestStage = 'No Interviews Yet';
       }
 
-      // Determine early-intervention flags (PDF Goal 3)
+      // Determine early-intervention flags for active (unplaced) candidates (PDF Goal 3)
       const flags = [];
 
-      // Flag 1: 3 or more recruiter screens / early rounds without reaching final round or offer
-      const earlyRounds = student.screensCount + student.firstRoundsCount;
-      if (!student.acceptance && student.offersCount === 0 && student.finalRoundsCount === 0 && earlyRounds >= 3) {
-        flags.push({
-          type: 'stalled_early',
-          severity: 'high',
-          label: 'Stalled in Early Rounds',
-          reason: `${earlyRounds} early interviews without advancing to final round. Recommended: behavioral & pitch coaching.`
-        });
-      }
+      if (!student.acceptance) {
+        // Flag 1: 3 or more recruiter screens / early rounds without reaching final round or offer
+        const earlyRounds = student.screensCount + student.firstRoundsCount;
+        if (student.offersCount === 0 && student.finalRoundsCount === 0 && earlyRounds >= 3) {
+          flags.push({
+            type: 'stalled_early',
+            severity: 'high',
+            label: 'Stalled in Early Rounds',
+            reason: `${earlyRounds} early interviews without advancing to final round. Recommended: behavioral & pitch coaching.`
+          });
+        }
 
-      // Flag 2: Student explicitly requested to meet with career services
-      if (student.meetingRequested) {
-        flags.push({
-          type: 'meeting_requested',
-          severity: 'medium',
-          label: 'Coaching Requested',
-          reason: 'Student checked "Yes" to meet with Career Services regarding offer or recruitment.'
-        });
-      }
+        // Flag 2: Student explicitly requested to meet with career services on active offers
+        if (student.meetingRequested) {
+          flags.push({
+            type: 'meeting_requested',
+            severity: 'medium',
+            label: 'Coaching Requested',
+            reason: 'Student checked "Yes" to meet with Career Services regarding offer evaluation or negotiation.'
+          });
+        }
 
-      // Flag 3: Completed final round interviews but zero offers received
-      if (!student.acceptance && student.offersCount === 0 && student.finalRoundsCount >= 2) {
-        flags.push({
-          type: 'final_round_plateau',
-          severity: 'high',
-          label: 'Final Round Conversion',
-          reason: `${student.finalRoundsCount} final round interviews with no offer yet. Recommended: technical debrief & closing prep.`
-        });
-      }
+        // Flag 3: Completed final round interviews but zero offers received
+        if (student.offersCount === 0 && student.finalRoundsCount >= 2) {
+          flags.push({
+            type: 'final_round_plateau',
+            severity: 'high',
+            label: 'Final Round Conversion Gap',
+            reason: `${student.finalRoundsCount} final round interviews without an offer yet. Recommended: technical debrief & closing prep.`
+          });
+        }
 
-      // Flag 4: Zero interviews reported (passive / low activity)
-      if (student.totalInterviews === 0 && student.status === 'Seeking') {
-        flags.push({
-          type: 'inactive',
-          severity: 'low',
-          label: 'Zero Activity Logged',
-          reason: 'No interviews or applications recorded yet. Recommended: check-in on resume and pipeline.'
-        });
+        // Flag 4: Zero interviews reported (passive / low activity)
+        if (student.totalInterviews === 0) {
+          flags.push({
+            type: 'inactive',
+            severity: 'low',
+            label: 'Zero Activity Logged',
+            reason: 'No interviews or applications recorded yet. Recommended: check-in on resume and pipeline.'
+          });
+        }
       }
 
       student.supportFlags = flags;

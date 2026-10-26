@@ -1,3 +1,5 @@
+import { openInspector } from './replicationView.js';
+
 /**
  * Renders the mini funnel progress indicator on a student card.
  */
@@ -49,33 +51,34 @@ export function openStudentDrawer(student) {
     <div class="card" style="margin-bottom: 1.5rem; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.05);">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
         <div>
-          <span class="badge badge-placed" style="margin-bottom: 0.5rem;">Accepted Employment Offer</span>
+          <span class="badge badge-placed" style="margin-bottom: 0.5rem;">Accepted Employment Offer (Col 11)</span>
           <h4 style="font-size: 1.15rem; font-weight: 700;">${student.acceptance.company}</h4>
           <p style="color: var(--text-secondary); font-size: 0.9rem;">${student.acceptance.role}</p>
         </div>
         <div style="text-align: right;">
-          <div style="font-size: 1.25rem; font-weight: 800; color: #10B981;">
+          <div style="font-size: 1.35rem; font-weight: 800; color: #10B981;">
             $${student.acceptance.compensation.total.toLocaleString()}
           </div>
           <div style="font-size: 0.75rem; color: var(--text-muted);">First-Year Total Comp</div>
         </div>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.8rem; color: var(--text-secondary); border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.825rem; color: var(--text-secondary); border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
         <div>Base Salary: <strong style="color: var(--text-primary);">$${student.acceptance.compensation.base.toLocaleString()}</strong></div>
-        <div>Bonus: <strong style="color: var(--text-primary);">$${student.acceptance.compensation.bonus.toLocaleString()}</strong></div>
-        <div>Location: <strong style="color: var(--text-primary);">${student.acceptance.location || 'N/A'}</strong></div>
-        <div>Work Mode: <strong style="color: var(--text-primary);">${student.acceptance.workingConditions || 'N/A'}</strong></div>
+        <div>Signing Bonus: <strong style="color: var(--text-primary);">$${student.acceptance.compensation.bonus.toLocaleString()}</strong></div>
+        <div>Location (Col 13): <strong style="color: var(--text-primary);">${student.acceptance.location || 'N/A'}</strong></div>
+        <div>Work Mode (Col 14): <strong style="color: var(--text-primary);">${student.acceptance.workingConditions || 'N/A'}</strong></div>
       </div>
     </div>
   ` : '';
 
   const flagsInfo = student.supportFlags.length > 0 ? `
-    <div style="margin-bottom: 1.5rem; padding: 1rem; border-radius: var(--radius-md); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);">
-      <div style="display: flex; align-items: center; gap: 0.5rem; color: #EF4444; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.5rem;">
-        <span>Career Services Coaching Notice</span>
+    <div style="margin-bottom: 1.5rem; padding: 1.15rem; border-radius: var(--radius-md); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.35);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="color: #EF4444; font-weight: 700; font-size: 0.85rem;">Career Services Coaching Radar Notice</span>
+        <button class="info-pill btn-inspect-flag" style="font-size: 0.7rem;">Inspect Flag Logic</button>
       </div>
       ${student.supportFlags.map(f => `
-        <div style="font-size: 0.8rem; margin-top: 0.35rem; color: #CBD5E1;">
+        <div style="font-size: 0.825rem; margin-top: 0.35rem; color: #E2E8F0;">
           <strong>${f.label}:</strong> ${f.reason}
         </div>
       `).join('')}
@@ -88,20 +91,21 @@ export function openStudentDrawer(student) {
   allEvents.sort((a, b) => (b.date || 0) - (a.date || 0));
 
   content.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
-      <div style="display: flex; align-items: center; gap: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.75rem;">
+      <div style="display: flex; align-items: center; gap: 1.15rem;">
         <img 
           src="${student.avatarUrl}" 
           alt="${student.name}" 
           class="student-avatar"
-          style="width: 64px; height: 64px;"
+          style="width: 68px; height: 68px;"
           onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=1E293B&color=F8FAFC'"
         />
         <div>
           <h3 style="font-size: 1.35rem; font-weight: 700;">${student.name}</h3>
           <p style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">${student.email} • ${student.unityID}</p>
-          <div style="margin-top: 0.35rem;">
+          <div style="margin-top: 0.4rem; display: flex; gap: 0.4rem; align-items: center;">
             ${getStatusBadge(student.status)}
+            ${student.supportFlags.length > 0 ? '<span class="badge badge-coaching">Needs Coaching</span>' : ''}
           </div>
         </div>
       </div>
@@ -111,10 +115,10 @@ export function openStudentDrawer(student) {
     ${flagsInfo}
     ${acceptedInfo}
 
-    <div style="margin-bottom: 1.5rem;">
+    <div style="margin-bottom: 1.75rem;">
       <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem;">Recruitment Funnel Progress</h4>
       ${renderMiniFunnel(student)}
-      <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+      <div style="display: flex; justify-content: space-between; font-size: 0.775rem; color: var(--text-muted); margin-top: 0.4rem;">
         <span>Screen (${student.screensCount})</span>
         <span>Round 1 (${student.firstRoundsCount})</span>
         <span>Round 2 (${student.secondRoundsCount})</span>
@@ -124,9 +128,9 @@ export function openStudentDrawer(student) {
     </div>
 
     <div>
-      <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem;">Activity History (${allEvents.length} Entries)</h4>
+      <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem;">Activity History (${allEvents.length} Entries)</h4>
       ${allEvents.length === 0 ? `
-        <p style="color: var(--text-muted); font-size: 0.85rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-md);">
+        <p style="color: var(--text-muted); font-size: 0.85rem; padding: 1.25rem; background: var(--bg-secondary); border-radius: var(--radius-md);">
           No interviews or offers logged yet for this candidate.
         </p>
       ` : `
@@ -149,18 +153,18 @@ export function openStudentDrawer(student) {
                   <div class="timeline-title">${evt.company}</div>
                   <div class="timeline-desc">${evt.role || evt.department || 'Analytics Specialist'}</div>
                   ${evt.source && evt.source !== 'Unspecified' ? `
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
-                      Source: <strong>${evt.source}</strong>
+                    <div style="font-size: 0.775rem; color: var(--text-muted); margin-top: 0.25rem;">
+                      Source (Col 7): <strong>${evt.source}</strong>
                     </div>
                   ` : ''}
                   ${evt.notes ? `
                     <div class="timeline-feedback">
-                      <strong>Interview Notes:</strong> "${evt.notes}"
+                      <strong>Interview Notes (Col 8):</strong> "${evt.notes}"
                     </div>
                   ` : ''}
                   ${evt.wantsMeeting ? `
-                    <div style="margin-top: 0.5rem; font-size: 0.75rem; color: #EF4444; font-weight: 600;">
-                      * Requested Career Services Meeting
+                    <div style="margin-top: 0.5rem; font-size: 0.775rem; color: #EF4444; font-weight: 600;">
+                      * Requested Career Services Meeting (Col 10)
                     </div>
                   ` : ''}
                 </div>
@@ -177,6 +181,10 @@ export function openStudentDrawer(student) {
 
   document.getElementById('btn-close-drawer')?.addEventListener('click', closeStudentDrawer);
   document.getElementById('drawer-overlay')?.addEventListener('click', closeStudentDrawer);
+
+  content.querySelector('.btn-inspect-flag')?.addEventListener('click', () => {
+    openInspector('stalled_early_flag');
+  });
 }
 
 export function closeStudentDrawer() {
@@ -188,12 +196,13 @@ export function closeStudentDrawer() {
 }
 
 /**
- * Main Student Directory Renderer
+ * Main Student Directory & Coaching Radar View
  */
 export function renderStudentDirectory(container, data) {
   let searchTerm = '';
-  let statusFilter = 'ALL';
-  let stageFilter = 'ALL';
+  let activeFilter = 'ALL';
+
+  const flaggedCount = data.flaggedStudents.length;
 
   function filterAndDisplay() {
     let filtered = data.students.filter(student => {
@@ -201,26 +210,30 @@ export function renderStudentDirectory(container, data) {
         student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         student.unityID.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchStatus = 
-        statusFilter === 'ALL' ||
-        (statusFilter === 'FLAGGED' ? student.supportFlags.length > 0 : student.status === statusFilter);
+      let matchFilter = true;
+      if (activeFilter === 'COACHING') {
+        matchFilter = student.supportFlags.length > 0;
+      } else if (activeFilter === 'PLACED') {
+        matchFilter = student.status === 'Placed';
+      } else if (activeFilter === 'INTERVIEWING') {
+        matchFilter = student.status === 'Interviewing';
+      } else if (activeFilter === 'SEEKING') {
+        matchFilter = student.status === 'Seeking';
+      }
 
-      const matchStage = 
-        stageFilter === 'ALL' || student.highestStage.includes(stageFilter);
-
-      return matchSearch && matchStatus && matchStage;
+      return matchSearch && matchFilter;
     });
 
     const grid = document.getElementById('students-card-grid');
     const countBadge = document.getElementById('students-filtered-count');
-    if (countBadge) countBadge.textContent = `${filtered.length} students found`;
+    if (countBadge) countBadge.textContent = `${filtered.length} students shown`;
 
     if (!grid) return;
 
     if (filtered.length === 0) {
       grid.innerHTML = `
-        <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: var(--bg-surface); border-radius: var(--radius-lg); border: 1px solid var(--border-subtle);">
-          <p style="color: var(--text-secondary); font-size: 1rem;">No students matched the selected search and filter criteria.</p>
+        <div style="grid-column: 1 / -1; text-align: center; padding: 4rem; background: var(--bg-surface); border-radius: var(--radius-lg); border: 1px solid var(--border-subtle);">
+          <p style="color: var(--text-secondary); font-size: 1.05rem;">No candidates matched your search and filter criteria.</p>
         </div>
       `;
       return;
@@ -240,7 +253,7 @@ export function renderStudentDirectory(container, data) {
             <div class="student-unity">${student.unityID}</div>
             <div style="margin-top: 0.35rem; display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
               ${getStatusBadge(student.status)}
-              ${student.supportFlags.length > 0 ? '<span class="badge badge-coaching">Coaching Flag</span>' : ''}
+              ${student.supportFlags.length > 0 ? `<span class="badge badge-coaching">${student.supportFlags[0].label}</span>` : ''}
             </div>
           </div>
         </div>
@@ -269,44 +282,30 @@ export function renderStudentDirectory(container, data) {
   container.innerHTML = `
     <div class="section-header">
       <div>
-        <h2 class="section-title">Student Recruitment Directory</h2>
-        <p class="section-desc">Search, filter, and review individual candidate pipeline progress and interview histories</p>
+        <h2 class="section-title">Student Pipeline & Coaching Radar</h2>
+        <p class="section-desc">Search candidate progress, inspect interview histories, and triage candidates needing targeted interview preparation</p>
       </div>
-      <span class="badge badge-placed" id="students-filtered-count">${data.students.length} students enrolled</span>
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <button class="info-pill btn-inspect-kpi" data-key="stalled_early_flag">Inspect Coaching Flag Rules</button>
+        <span class="badge badge-placed" id="students-filtered-count">${data.students.length} students</span>
+      </div>
     </div>
 
-    <!-- Filter & Search Toolbar -->
+    <!-- Filter & Category Pill Toolbar -->
     <div class="filter-toolbar">
       <div class="search-box">
         <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
         </svg>
-        <input type="text" id="student-search-input" class="search-input" placeholder="Search student name or UnityID...">
+        <input type="text" id="student-search-input" class="search-input" placeholder="Search by name or UnityID...">
       </div>
 
-      <div class="filter-group">
-        <label for="filter-status-select" class="filter-label">Status:</label>
-        <select id="filter-status-select" class="select-control">
-          <option value="ALL">All Statuses</option>
-          <option value="Placed">Placed (Offer Accepted)</option>
-          <option value="Has Offer">Has Active Offer</option>
-          <option value="Interviewing">Active in Interviews</option>
-          <option value="Seeking">Seeking Opportunities</option>
-          <option value="FLAGGED">Flagged for Coaching</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label for="filter-stage-select" class="filter-label">Highest Stage:</label>
-        <select id="filter-stage-select" class="select-control">
-          <option value="ALL">All Stages</option>
-          <option value="Offer Accepted">Offer Accepted</option>
-          <option value="Job Offer">Job Offer Received</option>
-          <option value="Final Round">Final Round</option>
-          <option value="Second Round">Second Round</option>
-          <option value="First Round">First Round</option>
-          <option value="Recruiter Screen">Recruiter Screen</option>
-        </select>
+      <div class="filter-pills">
+        <button class="pill-btn active" data-filter="ALL">All Enrolled (75)</button>
+        <button class="pill-btn pill-alert" data-filter="COACHING">Needs Coaching Radar (${flaggedCount})</button>
+        <button class="pill-btn" data-filter="PLACED">Placed (${data.placedCount})</button>
+        <button class="pill-btn" data-filter="INTERVIEWING">Active Interviews (${data.interviewingCount})</button>
+        <button class="pill-btn" data-filter="SEEKING">Seeking (${data.seekingCount})</button>
       </div>
     </div>
 
@@ -316,22 +315,23 @@ export function renderStudentDirectory(container, data) {
 
   // Bind filter events
   const searchInput = document.getElementById('student-search-input');
-  const statusSelect = document.getElementById('filter-status-select');
-  const stageSelect = document.getElementById('filter-stage-select');
-
   searchInput?.addEventListener('input', (e) => {
     searchTerm = e.target.value;
     filterAndDisplay();
   });
 
-  statusSelect?.addEventListener('change', (e) => {
-    statusFilter = e.target.value;
-    filterAndDisplay();
+  const pillButtons = container.querySelectorAll('.pill-btn');
+  pillButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      pillButtons.forEach(b => b.classList.remove('active'));
+      e.currentTarget.classList.add('active');
+      activeFilter = e.currentTarget.getAttribute('data-filter');
+      filterAndDisplay();
+    });
   });
 
-  stageSelect?.addEventListener('change', (e) => {
-    stageFilter = e.target.value;
-    filterAndDisplay();
+  container.querySelector('.btn-inspect-kpi')?.addEventListener('click', () => {
+    openInspector('stalled_early_flag');
   });
 
   filterAndDisplay();
