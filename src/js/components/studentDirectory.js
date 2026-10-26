@@ -64,9 +64,12 @@ export function openStudentDrawer(student) {
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.825rem; color: #065F46; border-top: 1px solid rgba(5, 150, 105, 0.2); padding-top: 0.75rem;">
         <div>Base Salary: <strong style="color: #064E3B;">$${student.acceptance.compensation.base.toLocaleString()}</strong></div>
-        <div>Signing Bonus: <strong style="color: #064E3B;">$${student.acceptance.compensation.bonus.toLocaleString()}</strong></div>
+        <div>Bonus: <strong style="color: #064E3B;">${student.acceptance.compensation.bonusLabel || `$${student.acceptance.compensation.bonus.toLocaleString()}`}</strong></div>
         <div>Location (Col 13): <strong style="color: #064E3B;">${student.acceptance.location || 'N/A'}</strong></div>
         <div>Work Mode (Col 14): <strong style="color: #064E3B;">${student.acceptance.workingConditions || 'N/A'}</strong></div>
+        <div style="grid-column: 1 / -1; margin-top: 0.35rem; font-size: 0.775rem; color: #047857; background: rgba(5, 150, 105, 0.08); padding: 0.4rem 0.65rem; border-radius: var(--radius-sm);">
+          Reported Text (Col 12): &ldquo;${student.acceptance.compensation.raw}&rdquo;
+        </div>
       </div>
     </div>
   ` : '';

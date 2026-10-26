@@ -105,9 +105,12 @@ export function renderStudentPortal(container, data) {
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.85rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
           <div>Base Salary: <strong style="color: var(--text-primary);">$${student.acceptance.compensation.base.toLocaleString()}</strong></div>
-          <div>Signing Bonus: <strong style="color: var(--text-primary);">$${student.acceptance.compensation.bonus.toLocaleString()}</strong></div>
+          <div>Bonus: <strong style="color: var(--text-primary);">${student.acceptance.compensation.bonusLabel || `$${student.acceptance.compensation.bonus.toLocaleString()}`}</strong></div>
           <div>Location: <strong style="color: var(--text-primary);">${student.acceptance.location || 'N/A'}</strong></div>
           <div>Work Mode: <strong style="color: var(--text-primary);">${student.acceptance.workingConditions || 'N/A'}</strong></div>
+          <div style="grid-column: 1 / -1; font-size: 0.775rem; color: var(--text-muted); background: var(--bg-secondary); padding: 0.45rem 0.75rem; border-radius: var(--radius-sm);">
+            Reported Text (Col 12): &ldquo;${student.acceptance.compensation.raw}&rdquo;
+          </div>
         </div>
       </div>
     ` : ''}

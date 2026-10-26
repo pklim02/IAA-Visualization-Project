@@ -9,33 +9,49 @@ import Papa from 'papaparse';
  * - "$122,000 base salary, 5% annual performance bonus"
  */
 export function parseCompensation(str) {
-  if (!str) return { base: 0, bonus: 0, total: 0, raw: '' };
+  if (!str) {
+    return { base: 0, bonus: 0, total: 0, bonusType: 'none', bonusLabel: 'No Bonus ($0)', raw: '' };
+  }
 
   let base = 0;
   let bonus = 0;
+  let bonusType = 'none';
+  let bonusLabel = 'No Bonus ($0)';
 
-  // Extract base salary ($xxx,xxx)
-  const baseMatch = str.match(/\$([0-9,]+)\s*(?:base|salary)?/i);
+  // 1. Extract base salary ($xxx,xxx or xxx,xxx base or xxxk)
+  const baseMatch = str.match(/\$([0-9,]+)\s*(?:base|salary)?/i) || str.match(/([0-9,]{5,})\s*(?:base|salary)/i);
   if (baseMatch) {
     base = parseInt(baseMatch[1].replace(/,/g, ''), 10) || 0;
+  } else {
+    const kMatch = str.match(/\$?([0-9.]+)\s*k\s*(?:base|salary)?/i);
+    if (kMatch) {
+      base = Math.round(parseFloat(kMatch[1]) * 1000);
+    }
   }
 
-  // Extract lump sum bonus / relocation ($x,xxx)
-  const bonusMatch = str.match(/\$([0-9,]+)\s*(?:signing bonus|relocation|bonus|sign on)/i);
-  if (bonusMatch) {
-    bonus = parseInt(bonusMatch[1].replace(/,/g, ''), 10) || 0;
+  // 2. Extract percentage bonus (e.g. 12% annual performance bonus)
+  const pctMatch = str.match(/([0-9.]+)%\s*(?:annual\s*)?(?:performance\s*)?bonus/i);
+  if (pctMatch && base > 0) {
+    const pct = parseFloat(pctMatch[1]);
+    bonus = Math.round(base * (pct / 100));
+    bonusType = 'performance';
+    bonusLabel = `${pct}% Performance Bonus ($${bonus.toLocaleString()})`;
   } else {
-    // Check percentage bonus (e.g. 10% annual performance bonus)
-    const pctMatch = str.match(/([0-9.]+)%\s*(?:annual\s*)?(?:performance\s*)?bonus/i);
-    if (pctMatch && base > 0) {
-      const pct = parseFloat(pctMatch[1]);
-      bonus = Math.round(base * (pct / 100));
+    // 3. Extract lump sum signing / relocation bonus ($x,xxx)
+    const lumpMatch = str.match(/\$([0-9,]+)\s*(signing bonus|relocation|sign on|bonus)/i);
+    if (lumpMatch) {
+      bonus = parseInt(lumpMatch[1].replace(/,/g, ''), 10) || 0;
+      const typeStr = lumpMatch[2].toLowerCase();
+      bonusType = typeStr.includes('relocation') ? 'relocation' : 'signing';
+      bonusLabel = `$${bonus.toLocaleString()} ${typeStr.includes('relocation') ? 'Relocation' : 'Signing Bonus'}`;
     }
   }
 
   return {
     base,
     bonus,
+    bonusType,
+    bonusLabel,
     total: base + bonus,
     raw: str.trim()
   };
