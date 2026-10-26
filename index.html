@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NC State IAA - Career Services Recruitment Analytics</title>
+  <meta name="description" content="Automated, interactive recruitment dashboard for NC State Institute for Advanced Analytics Career Services">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/css/styles.css">
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="header-branding">
+        <div class="ncstate-logo-badge">
+          <span class="ncstate-brick">NC STATE</span>
+        </div>
+        <div class="header-titles">
+          <h1 class="header-title">Institute for Advanced Analytics</h1>
+          <p class="header-subtitle">Career Services Recruitment & Placement Dashboard</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btn-open-form" class="btn btn-primary" title="Simulate real-time Google Form response submission">
+          <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+          </svg>
+          Log New Form Entry
+        </button>
+
+        <button id="btn-upload-csv" class="btn btn-secondary" title="Upload new Google Forms CSV export">
+          <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+          </svg>
+          Import CSV
+        </button>
+        <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+
+        <button id="btn-export-data" class="btn btn-ghost" title="Export clean dataset">
+          <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+          Export
+        </button>
+
+        <div class="cohort-indicator">
+          <span class="cohort-badge">Cohort: Class of 2027</span>
+          <span id="live-indicator" class="live-dot" title="Live form sync active"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Global Tab Navigation -->
+    <nav class="app-nav">
+      <ul class="nav-tabs" role="tablist">
+        <li class="nav-item">
+          <button class="nav-link active" data-tab="overview" id="tab-overview" role="tab" aria-selected="true">
+            <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
+              <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" />
+            </svg>
+            Executive Overview
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-tab="students" id="tab-students" role="tab" aria-selected="false">
+            <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+            </svg>
+            Student Profiles (<span id="tab-student-count">75</span>)
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link nav-link-alert" data-tab="support" id="tab-support" role="tab" aria-selected="false">
+            <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            Support Radar
+            <span class="badge-alert" id="tab-support-badge">0</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-tab="employers" id="tab-employers" role="tab" aria-selected="false">
+            <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" />
+            </svg>
+            Employer Trends
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-tab="sources" id="tab-sources" role="tab" aria-selected="false">
+            <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd" />
+            </svg>
+            Recruiting Sources
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-tab="compensation" id="tab-compensation" role="tab" aria-selected="false">
+            <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clip-rule="evenodd" />
+            </svg>
+            Compensation Analytics
+          </button>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- Main Content Container (Views dynamically rendered) -->
+    <main class="app-main">
+      <div id="view-overview" class="view-panel active"></div>
+      <div id="view-students" class="view-panel"></div>
+      <div id="view-support" class="view-panel"></div>
+      <div id="view-employers" class="view-panel"></div>
+      <div id="view-sources" class="view-panel"></div>
+      <div id="view-compensation" class="view-panel"></div>
+    </main>
+
+    <!-- Student Detail Slide-over Drawer -->
+    <aside id="student-drawer" class="student-drawer" aria-hidden="true">
+      <div class="drawer-overlay" id="drawer-overlay"></div>
+      <div class="drawer-panel" id="drawer-content"></div>
+    </aside>
+
+    <!-- Google Form Submission Modal -->
+    <div id="form-modal" class="modal-overlay" aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <h3 class="modal-title">Log Recruitment Activity</h3>
+            <p class="modal-subtitle">Simulates real-time Google Form submission with immediate dashboard recalculation</p>
+          </div>
+          <button id="btn-close-form" class="modal-close-btn" aria-label="Close modal">&times;</button>
+        </div>
+        <form id="submission-form" class="modal-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="form-student-select">Student Name *</label>
+              <select id="form-student-select" required></select>
+            </div>
+            <div class="form-group">
+              <label for="form-report-type">What are you reporting today? *</label>
+              <select id="form-report-type" required>
+                <option value="Interview">Interview</option>
+                <option value="Offer">Job Offer</option>
+                <option value="Acceptance">Job Acceptance</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Dynamic conditional fields -->
+          <div id="form-interview-fields">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="form-company-interview">Company, Position, Department *</label>
+                <input type="text" id="form-company-interview" placeholder="e.g. Lumarion Health, Marketing Analytics Analyst, Risk Management">
+              </div>
+              <div class="form-group">
+                <label for="form-interview-stage">Which interview was this? *</label>
+                <select id="form-interview-stage">
+                  <option value="Recruiter Screening">Recruiter Screening</option>
+                  <option value="First Round">First Round</option>
+                  <option value="Second Round">Second Round</option>
+                  <option value="Final Round">Final Round</option>
+                  <option value="Take-home Assignment">Take-home Assignment</option>
+                  <option value="Technical Assessment">Technical Assessment</option>
+                  <option value="Superday">Superday</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="form-source">How did you hear about the job?</label>
+                <select id="form-source">
+                  <option value="Institute">Institute (IAA Career Services)</option>
+                  <option value="Alumni">Alumni</option>
+                  <option value="LinkedIn">LinkedIn</option>
+                  <option value="Recruiter reached out">Recruiter reached out</option>
+                  <option value="Career fair">Career fair</option>
+                  <option value="Referral from a friend">Referral from a friend</option>
+                  <option value="Company website">Company website</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="form-notes">Challenging technical concepts or notes</label>
+                <input type="text" id="form-notes" placeholder="e.g. SQL window functions, business case study">
+              </div>
+            </div>
+          </div>
+
+          <div id="form-offer-fields" style="display: none;">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="form-company-offer">Company and Job Title *</label>
+                <input type="text" id="form-company-offer" placeholder="e.g. Evernight Financial, Data Scientist">
+              </div>
+              <div class="form-group">
+                <label for="form-meet-services">Meet with Career Services to discuss? *</label>
+                <select id="form-meet-services">
+                  <option value="No">No</option>
+                  <option value="Yes">Yes, please schedule a session</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div id="form-acceptance-fields" style="display: none;">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="form-company-acceptance">Company and Job Title *</label>
+                <input type="text" id="form-company-acceptance" placeholder="e.g. Duskfield Capital, Business Intelligence Analyst">
+              </div>
+              <div class="form-group">
+                <label for="form-compensation">Final Offer Breakdown (Salary & Bonuses) *</label>
+                <input type="text" id="form-compensation" placeholder="e.g. $115,000 base salary, $8,000 signing bonus">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="form-location">Job Location (City/State)</label>
+                <input type="text" id="form-location" placeholder="e.g. Raleigh, NC or Charlotte, NC">
+              </div>
+              <div class="form-group">
+                <label for="form-work-conditions">Working Conditions</label>
+                <select id="form-work-conditions">
+                  <option value="Hybrid">Hybrid</option>
+                  <option value="Fully on-site">Fully on-site</option>
+                  <option value="Remote">Remote</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="btn-cancel-form" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Submit to Live Stream</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+  </div>
+
+  <script type="module" src="./src/js/main.js"></script>
+</body>
+</html>
