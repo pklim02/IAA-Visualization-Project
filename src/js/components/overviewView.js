@@ -170,6 +170,50 @@ export function renderOverview(container, data) {
         </div>
       </div>
     </div>
+
+    <!-- Recent Cohort Activity Feed (Newest First) -->
+    <div class="card" style="margin-top: 1.75rem;">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">Recent Cohort Activity Feed</h3>
+          <p class="card-subtitle">Most recent candidate submissions recorded across the Class of 2027 (newest first)</p>
+        </div>
+        <span class="badge badge-placed">Live Feed</span>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Student Candidate</th>
+              <th>Reported Activity</th>
+              <th>Employer Organization</th>
+              <th>Role / Stage</th>
+              <th>Recruitment Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.rawTracker.slice(0, 5).map((row, idx) => `
+              <tr>
+                <td style="font-size: 0.775rem; color: var(--text-muted);">
+                  ${idx === 0 ? '<span class="badge badge-placed" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-right: 0.35rem;">Newest</span>' : ''}
+                  ${row['Timestamp']}
+                </td>
+                <td><strong>${row['Last, First Name']}</strong></td>
+                <td>
+                  <span class="badge ${row['What are you reporting today?'] === 'Acceptance' ? 'badge-placed' : (row['What are you reporting today?'] === 'Offer' ? 'badge-offer' : 'badge-interviewing')}">
+                    ${row['What are you reporting today?']}
+                  </span>
+                </td>
+                <td><strong>${(row['Please list the company, position, department/division. '] || row['Please list the company and job title'] || row['Please list the company name and job title. '] || '-').split(',')[0]}</strong></td>
+                <td style="font-size: 0.8rem; color: var(--text-secondary);">${row['Which interview was this? '] || row['What are the working conditions? '] || '-'}</td>
+                <td style="font-size: 0.8rem; color: var(--text-muted);">${row['How did you hear about the job?'] || 'Institute'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
   `;
 
   // Attach inspector clicks

@@ -16,7 +16,7 @@ export function renderStudentPortal(container, data) {
 
   const allEvents = [...student.interviews, ...student.offers];
   if (student.acceptance) allEvents.push(student.acceptance);
-  allEvents.sort((a, b) => (b.date || 0) - (a.date || 0));
+  allEvents.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
 
   const stages = ['Screen', 'Round 1', 'Round 2', 'Final', 'Offer', 'Placed'];
   let filledCount = 0;
@@ -128,15 +128,18 @@ export function renderStudentPortal(container, data) {
           </div>
         ` : `
           <div class="timeline">
-            ${allEvents.map(evt => `
+            ${allEvents.map((evt, idx) => `
               <div class="timeline-item">
                 <div class="timeline-dot ${evt.reportType === 'Acceptance' ? 'dot-placed' : (evt.reportType === 'Offer' ? 'dot-offer' : '')}"></div>
                 <div class="timeline-content">
                   <div class="timeline-header">
                     <span>${evt.timestamp || 'Recent'}</span>
-                    <span class="badge ${evt.reportType === 'Acceptance' ? 'badge-placed' : (evt.reportType === 'Offer' ? 'badge-offer' : 'badge-interviewing')}">
-                      ${evt.reportType} ${evt.stage ? `• ${evt.stage}` : ''}
-                    </span>
+                    <div style="display: flex; gap: 0.35rem; align-items: center;">
+                      ${idx === 0 ? '<span class="badge badge-placed" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">Most Recent</span>' : ''}
+                      <span class="badge ${evt.reportType === 'Acceptance' ? 'badge-placed' : (evt.reportType === 'Offer' ? 'badge-offer' : 'badge-interviewing')}">
+                        ${evt.reportType} ${evt.stage ? `• ${evt.stage}` : ''}
+                      </span>
+                    </div>
                   </div>
                   <div class="timeline-title">${evt.company}</div>
                   <div class="timeline-desc">${evt.role || evt.department}</div>

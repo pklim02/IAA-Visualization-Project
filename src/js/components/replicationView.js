@@ -219,8 +219,8 @@ export function renderReplicationGuide(container, data) {
     <div class="card">
       <div class="card-header">
         <div>
-          <h3 class="card-title">Raw Dataset Preview (First 8 Records)</h3>
-          <p class="card-subtitle">Live reflection of employment_tracker_synthetic.csv records currently loaded</p>
+          <h3 class="card-title">Raw Dataset Preview (Newest 8 Submissions First)</h3>
+          <p class="card-subtitle">Live reflection of employment_tracker_synthetic.csv records currently loaded (sorted newest first)</p>
         </div>
       </div>
       <div class="table-responsive">

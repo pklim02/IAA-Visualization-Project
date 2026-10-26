@@ -88,7 +88,7 @@ export function openStudentDrawer(student) {
   // Combine interviews and offers chronologically
   const allEvents = [...student.interviews, ...student.offers];
   if (student.acceptance) allEvents.push(student.acceptance);
-  allEvents.sort((a, b) => (b.date || 0) - (a.date || 0));
+  allEvents.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
 
   content.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.75rem;">
@@ -128,14 +128,14 @@ export function openStudentDrawer(student) {
     </div>
 
     <div>
-      <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem;">Activity History (${allEvents.length} Entries)</h4>
+      <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem;">Activity History (${allEvents.length} Entries • Newest First)</h4>
       ${allEvents.length === 0 ? `
         <p style="color: var(--text-muted); font-size: 0.85rem; padding: 1.25rem; background: var(--bg-secondary); border-radius: var(--radius-md);">
           No interviews or offers logged yet for this candidate.
         </p>
       ` : `
         <div class="timeline">
-          ${allEvents.map(evt => {
+          ${allEvents.map((evt, idx) => {
             const isOffer = evt.reportType === 'Offer';
             const isAcceptance = evt.reportType === 'Acceptance';
             const dotClass = isAcceptance ? 'dot-placed' : (isOffer ? 'dot-offer' : '');
@@ -146,9 +146,12 @@ export function openStudentDrawer(student) {
                 <div class="timeline-content">
                   <div class="timeline-header">
                     <span>${evt.timestamp || 'Recent'}</span>
-                    <span class="badge ${isAcceptance ? 'badge-placed' : (isOffer ? 'badge-offer' : 'badge-interviewing')}">
-                      ${evt.reportType} ${evt.stage ? `• ${evt.stage}` : ''}
-                    </span>
+                    <div style="display: flex; gap: 0.35rem; align-items: center;">
+                      ${idx === 0 ? '<span class="badge badge-placed" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">Most Recent</span>' : ''}
+                      <span class="badge ${isAcceptance ? 'badge-placed' : (isOffer ? 'badge-offer' : 'badge-interviewing')}">
+                        ${evt.reportType} ${evt.stage ? `• ${evt.stage}` : ''}
+                      </span>
+                    </div>
                   </div>
                   <div class="timeline-title">${evt.company}</div>
                   <div class="timeline-desc">${evt.role || evt.department || 'Analytics Specialist'}</div>
@@ -239,35 +242,50 @@ export function renderStudentDirectory(container, data) {
       return;
     }
 
-    grid.innerHTML = filtered.map(student => `
-      <div class="student-card" data-unity="${student.unityID}">
-        <div class="student-card-header">
-          <img 
-            src="${student.avatarUrl}" 
-            alt="${student.name}" 
-            class="student-avatar"
-            onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=1E293B&color=F8FAFC'"
-          />
-          <div class="student-info">
-            <h4 class="student-name" title="${student.name}">${student.name}</h4>
-            <div class="student-unity">${student.unityID}</div>
-            <div style="margin-top: 0.35rem; display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
-              ${getStatusBadge(student.status)}
-              ${student.supportFlags.length > 0 ? `<span class="badge badge-coaching">${student.supportFlags[0].label}</span>` : ''}
+    grid.innerHTML = filtered.map(student => {
+      const latest = student.latestActivity;
+      const latestColor = latest?.reportType === 'Acceptance' ? '#10B981' : (latest?.reportType === 'Offer' ? '#F59E0B' : '#3B82F6');
+
+      return `
+        <div class="student-card" data-unity="${student.unityID}">
+          <div class="student-card-header">
+            <img 
+              src="${student.avatarUrl}" 
+              alt="${student.name}" 
+              class="student-avatar"
+              onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=1E293B&color=F8FAFC'"
+            />
+            <div class="student-info">
+              <h4 class="student-name" title="${student.name}">${student.name}</h4>
+              <div class="student-unity">${student.unityID}</div>
+              <div style="margin-top: 0.35rem; display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+                ${getStatusBadge(student.status)}
+                ${student.supportFlags.length > 0 ? `<span class="badge badge-coaching">${student.supportFlags[0].label}</span>` : ''}
+              </div>
             </div>
           </div>
-        </div>
 
-        ${renderMiniFunnel(student)}
+          ${renderMiniFunnel(student)}
 
-        <div class="student-card-meta">
-          <span>${student.totalInterviews} interviews logged</span>
-          <span style="font-weight: 600; color: ${student.offersCount > 0 ? '#F59E0B' : 'inherit'};">
-            ${student.offersCount} ${student.offersCount === 1 ? 'offer' : 'offers'}
-          </span>
+          <!-- Most Recent Activity Callout -->
+          <div style="margin: 0.65rem 0; padding: 0.55rem 0.75rem; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); border-left: 3px solid ${latestColor}; font-size: 0.775rem;">
+            <div style="font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              ${latest ? `${latest.reportType}${latest.stage ? `: ${latest.stage}` : ''} • ${latest.company}` : 'No activity logged yet'}
+            </div>
+            <div style="color: var(--text-muted); font-size: 0.725rem; margin-top: 0.2rem;">
+              ${latest ? `Updated: ${latest.timestamp}` : 'Awaiting first response'}
+            </div>
+          </div>
+
+          <div class="student-card-meta">
+            <span>${student.totalInterviews} interviews logged</span>
+            <span style="font-weight: 600; color: ${student.offersCount > 0 ? '#F59E0B' : 'inherit'};">
+              ${student.offersCount} ${student.offersCount === 1 ? 'offer' : 'offers'}
+            </span>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     // Attach click listeners to cards
     grid.querySelectorAll('.student-card').forEach(card => {

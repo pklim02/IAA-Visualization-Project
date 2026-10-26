@@ -337,15 +337,40 @@ class DataService {
         }
       }
 
+      // Sort student interviews and offers newest first
+      student.interviews.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
+      student.offers.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
+
+      // Find most recent activity record
+      const allEvents = [...student.interviews, ...student.offers];
+      if (student.acceptance) allEvents.push(student.acceptance);
+      allEvents.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
+      student.latestActivity = allEvents[0] || null;
+      student.lastActivityDate = student.latestActivity ? student.latestActivity.date : null;
+
       student.supportFlags = flags;
+    });
+
+    // Ensure raw tracker submissions are ordered with newest records first
+    this.rawTracker.sort((a, b) => {
+      const timeA = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
+      const timeB = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
+      return timeB - timeA;
     });
   }
 
   /**
-   * Returns complete processed snapshot.
+   * Returns complete processed snapshot, sorted by most recent activity first.
    */
   getData() {
-    const studentList = Array.from(this.students.values());
+    // Sort students with most recently active candidates first
+    const studentList = Array.from(this.students.values()).sort((a, b) => {
+      const timeA = a.lastActivityDate ? a.lastActivityDate.getTime() : 0;
+      const timeB = b.lastActivityDate ? b.lastActivityDate.getTime() : 0;
+      if (timeB !== timeA) return timeB - timeA;
+      return a.name.localeCompare(b.name);
+    });
+
     return {
       students: studentList,
       rawTracker: this.rawTracker,
