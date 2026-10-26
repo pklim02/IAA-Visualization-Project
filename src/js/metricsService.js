@@ -67,12 +67,12 @@ export class MetricsService {
     });
 
     return [
-      { stage: 'Recruiter Screen', count: screens, color: '#3B82F6' },
-      { stage: 'First Round', count: round1, color: '#6366F1' },
-      { stage: 'Second Round', count: round2, color: '#8B5CF6' },
-      { stage: 'Final Round', count: finals, color: '#EC4899' },
-      { stage: 'Job Offer', count: offers, color: '#F59E0B' },
-      { stage: 'Accepted Position', count: acceptances, color: '#10B981' }
+      { stage: 'Recruiter Screen', count: screens, color: '#486B80' },
+      { stage: 'First Round', count: round1, color: '#3E6175' },
+      { stage: 'Second Round', count: round2, color: '#C25325' },
+      { stage: 'Final Round', count: finals, color: '#991B1B' },
+      { stage: 'Job Offer', count: offers, color: '#D97706' },
+      { stage: 'Accepted Position', count: acceptances, color: '#059669' }
     ];
   }
 

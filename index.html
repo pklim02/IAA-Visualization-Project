@@ -12,15 +12,27 @@
 </head>
 <body>
   <div id="app" class="app-container">
-    <!-- Top Navigation Header -->
+    <!-- NC State Official Top Brand Masthead (Matches official IAA website) -->
+    <div class="ncstate-top-strip">
+      <div class="ncstate-brick-badge">
+        <span class="brick-row-1">NC STATE</span>
+        <span class="brick-row-2">UNIVERSITY</span>
+      </div>
+      <div class="ncstate-top-utilities">
+        <span class="cohort-tag">Institute for Advanced Analytics • Master of Science in Analytics</span>
+        <div class="live-status-pill">
+          <span class="live-dot"></span>
+          <span>Tracker Live</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Navigation Header -->
     <header class="app-header">
       <div class="header-branding">
-        <div class="ncstate-logo-badge">
-          <span class="ncstate-brick">NC STATE</span>
-        </div>
         <div class="header-titles">
           <h1 class="header-title">Institute for Advanced Analytics</h1>
-          <p class="header-subtitle">Career Services Recruitment & Placement Intelligence</p>
+          <p class="header-subtitle">Career Services Recruitment & Placement Intelligence • Class of 2027</p>
         </div>
       </div>
 
@@ -94,7 +106,7 @@
           <!-- Admin Card -->
           <div style="background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <h4 style="font-size: 1.05rem; font-weight: 700; color: #FFFFFF;">Career Services Administrator</h4>
+              <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Career Services Administrator</h4>
               <span class="badge badge-placed">Full Access</span>
             </div>
             <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
@@ -108,7 +120,7 @@
           <!-- Student Card -->
           <div style="background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <h4 style="font-size: 1.05rem; font-weight: 700; color: #FFFFFF;">Student Account (Class of 2027)</h4>
+              <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Student Account (Class of 2027)</h4>
               <span class="badge badge-interviewing">75 Pre-Configured</span>
             </div>
             <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
@@ -118,7 +130,7 @@
               <label for="account-student-select">Select Student Account:</label>
               <select id="account-student-select"></select>
             </div>
-            <button id="btn-login-student" class="btn btn-secondary" style="width: 100%; justify-content: center; border-color: rgba(255, 255, 255, 0.2);">
+            <button id="btn-login-student" class="btn btn-secondary" style="width: 100%; justify-content: center;">
               Log In as Selected Student
             </button>
           </div>

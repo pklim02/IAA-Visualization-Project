@@ -200,7 +200,7 @@ export function renderReplicationGuide(container, data) {
               <tr>
                 <td><strong>${item.title}</strong></td>
                 <td><span class="badge badge-placed">${item.value}</span></td>
-                <td style="font-family: var(--font-mono); font-size: 0.775rem; color: #CBD5E1;">${item.columnSource.split(':')[1] || item.columnSource}</td>
+                <td style="font-family: var(--font-mono); font-size: 0.775rem; color: var(--text-secondary);">${item.columnSource.split(':')[1] || item.columnSource}</td>
                 <td style="font-size: 0.8rem; color: var(--text-secondary); max-width: 280px;">${item.condition}</td>
                 <td><code class="formula-code" style="font-size: 0.75rem;">${item.excelFormula}</code></td>
                 <td>

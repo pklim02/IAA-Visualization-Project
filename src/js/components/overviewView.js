@@ -11,6 +11,35 @@ export function renderOverview(container, data) {
   const comp = MetricsService.getCompensationMetrics(data);
 
   container.innerHTML = `
+    <!-- Official IAA Brand Hero Banner (Matches "Leaders in Data Science" motif from website) -->
+    <div class="iaa-hero-banner">
+      <div class="iaa-hero-content">
+        <div class="iaa-hero-badge">First in the Nation, Still Leading</div>
+        <h2 class="iaa-hero-title">Leaders in Analytics Placement</h2>
+        <p class="iaa-hero-text">
+          The Institute for Advanced Analytics equips MS in Analytics candidates with rigorous practical training and dedicated career coaching. Track real-time interview velocity, employer conversion rates, and compensation benchmarks for the Class of 2027.
+        </p>
+        <div class="iaa-hero-actions">
+          <button class="btn-hero-white" id="btn-hero-candidates">Explore 75 Candidate Profiles &rarr;</button>
+          <button class="btn-hero-outline" id="btn-hero-coaching">View Coaching Radar (${kpis.atRiskCount}) &rarr;</button>
+        </div>
+      </div>
+      <div class="iaa-hero-stats">
+        <div class="hero-stat-box">
+          <div class="hero-stat-value">${kpis.placementRate}%</div>
+          <div class="hero-stat-label">Placement Rate</div>
+        </div>
+        <div class="hero-stat-box">
+          <div class="hero-stat-value">$${kpis.medianComp.toLocaleString()}</div>
+          <div class="hero-stat-label">Median Comp</div>
+        </div>
+        <div class="hero-stat-box">
+          <div class="hero-stat-value">${kpis.totalInterviews}</div>
+          <div class="hero-stat-label">Interviews Logged</div>
+        </div>
+      </div>
+    </div>
+
     <div class="section-header">
       <div>
         <h2 class="section-title">Cohort Executive Overview & Outcomes</h2>
@@ -215,6 +244,29 @@ export function renderOverview(container, data) {
       </div>
     </div>
   `;
+
+  // Attach hero banner button actions
+  const heroCandidatesBtn = container.querySelector('#btn-hero-candidates');
+  if (heroCandidatesBtn) {
+    heroCandidatesBtn.addEventListener('click', () => {
+      const candidatesTab = document.querySelector('[data-tab="students"]');
+      if (candidatesTab) candidatesTab.click();
+    });
+  }
+
+  const heroCoachingBtn = container.querySelector('#btn-hero-coaching');
+  if (heroCoachingBtn) {
+    heroCoachingBtn.addEventListener('click', () => {
+      const candidatesTab = document.querySelector('[data-tab="students"]');
+      if (candidatesTab) {
+        candidatesTab.click();
+        setTimeout(() => {
+          const coachingPill = document.querySelector('.pill-btn[data-filter="at_risk"]');
+          if (coachingPill) coachingPill.click();
+        }, 50);
+      }
+    });
+  }
 
   // Attach inspector clicks
   container.querySelectorAll('.btn-inspect-kpi').forEach(btn => {

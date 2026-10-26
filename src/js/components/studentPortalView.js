@@ -28,25 +28,25 @@ export function renderStudentPortal(container, data) {
   else if (student.screensCount > 0) filledCount = 1;
 
   container.innerHTML = `
-    <!-- Student Hero Greeting Banner -->
-    <div class="card" style="margin-bottom: 2rem; border-color: rgba(204, 0, 0, 0.4); background: linear-gradient(135deg, #161F30 0%, #111827 100%);">
+    <!-- Student Hero Greeting Banner (IAA Slate-Teal Theme) -->
+    <div class="card" style="margin-bottom: 2rem; border: none; background: linear-gradient(135deg, var(--iaa-teal) 0%, var(--iaa-teal-dark) 100%); color: #FFFFFF; box-shadow: var(--shadow-md);">
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem;">
         <div style="display: flex; align-items: center; gap: 1.25rem;">
           <img 
             src="${student.avatarUrl}" 
             alt="${student.name}" 
             class="student-avatar" 
-            style="width: 72px; height: 72px; border: 3px solid var(--ncstate-red);"
-            onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=1E293B&color=F8FAFC'"
+            style="width: 72px; height: 72px; border: 3px solid #FFFFFF;"
+            onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=375364&color=FFFFFF'"
           />
           <div>
             <div style="display: flex; align-items: center; gap: 0.75rem;">
-              <h2 style="font-size: 1.6rem; font-weight: 800;">Welcome, ${student.name}</h2>
+              <h2 style="font-size: 1.6rem; font-weight: 800; color: #FFFFFF;">Welcome, ${student.name}</h2>
               <span class="badge ${student.status === 'Placed' ? 'badge-placed' : (student.status === 'Has Offer' ? 'badge-offer' : 'badge-interviewing')}">
                 ${student.status}
               </span>
             </div>
-            <p style="color: var(--text-secondary); font-size: 0.85rem; font-family: var(--font-mono); margin-top: 0.25rem;">
+            <p style="color: rgba(255, 255, 255, 0.88); font-size: 0.85rem; font-family: var(--font-mono); margin-top: 0.25rem;">
               UnityID: ${student.unityID} • ${student.email} • Class of 2027
             </p>
           </div>

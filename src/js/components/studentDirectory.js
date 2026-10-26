@@ -48,37 +48,37 @@ export function openStudentDrawer(student) {
   if (!drawer || !content) return;
 
   const acceptedInfo = student.acceptance ? `
-    <div class="card" style="margin-bottom: 1.5rem; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.05);">
+    <div class="card" style="margin-bottom: 1.5rem; border-color: var(--status-placed-border); background: var(--status-placed-bg);">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
         <div>
           <span class="badge badge-placed" style="margin-bottom: 0.5rem;">Accepted Employment Offer (Col 11)</span>
-          <h4 style="font-size: 1.15rem; font-weight: 700;">${student.acceptance.company}</h4>
-          <p style="color: var(--text-secondary); font-size: 0.9rem;">${student.acceptance.role}</p>
+          <h4 style="font-size: 1.15rem; font-weight: 700; color: #065F46;">${student.acceptance.company}</h4>
+          <p style="color: #047857; font-size: 0.9rem;">${student.acceptance.role}</p>
         </div>
         <div style="text-align: right;">
-          <div style="font-size: 1.35rem; font-weight: 800; color: #10B981;">
+          <div style="font-size: 1.35rem; font-weight: 800; color: #047857;">
             $${student.acceptance.compensation.total.toLocaleString()}
           </div>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">First-Year Total Comp</div>
+          <div style="font-size: 0.75rem; color: #065F46;">First-Year Total Comp</div>
         </div>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.825rem; color: var(--text-secondary); border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
-        <div>Base Salary: <strong style="color: var(--text-primary);">$${student.acceptance.compensation.base.toLocaleString()}</strong></div>
-        <div>Signing Bonus: <strong style="color: var(--text-primary);">$${student.acceptance.compensation.bonus.toLocaleString()}</strong></div>
-        <div>Location (Col 13): <strong style="color: var(--text-primary);">${student.acceptance.location || 'N/A'}</strong></div>
-        <div>Work Mode (Col 14): <strong style="color: var(--text-primary);">${student.acceptance.workingConditions || 'N/A'}</strong></div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.825rem; color: #065F46; border-top: 1px solid rgba(5, 150, 105, 0.2); padding-top: 0.75rem;">
+        <div>Base Salary: <strong style="color: #064E3B;">$${student.acceptance.compensation.base.toLocaleString()}</strong></div>
+        <div>Signing Bonus: <strong style="color: #064E3B;">$${student.acceptance.compensation.bonus.toLocaleString()}</strong></div>
+        <div>Location (Col 13): <strong style="color: #064E3B;">${student.acceptance.location || 'N/A'}</strong></div>
+        <div>Work Mode (Col 14): <strong style="color: #064E3B;">${student.acceptance.workingConditions || 'N/A'}</strong></div>
       </div>
     </div>
   ` : '';
 
   const flagsInfo = student.supportFlags.length > 0 ? `
-    <div style="margin-bottom: 1.5rem; padding: 1.15rem; border-radius: var(--radius-md); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.35);">
+    <div style="margin-bottom: 1.5rem; padding: 1.15rem; border-radius: var(--radius-md); background: var(--status-alert-bg); border: 1px solid var(--status-alert-border);">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <span style="color: #EF4444; font-weight: 700; font-size: 0.85rem;">Career Services Coaching Radar Notice</span>
+        <span style="color: var(--status-alert); font-weight: 700; font-size: 0.85rem;">Career Services Coaching Radar Notice</span>
         <button class="info-pill btn-inspect-flag" style="font-size: 0.7rem;">Inspect Flag Logic</button>
       </div>
       ${student.supportFlags.map(f => `
-        <div style="font-size: 0.825rem; margin-top: 0.35rem; color: #E2E8F0;">
+        <div style="font-size: 0.825rem; margin-top: 0.35rem; color: #991B1B;">
           <strong>${f.label}:</strong> ${f.reason}
         </div>
       `).join('')}

@@ -1,17 +1,17 @@
 import Chart from 'chart.js/auto';
 
-// Global Chart.js dark-mode defaults
-Chart.defaults.color = '#94A3B8';
-Chart.defaults.font.family = "'Inter', sans-serif";
+// Global Chart.js light-theme defaults matching NC State IAA website
+Chart.defaults.color = '#475569';
+Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
 Chart.defaults.font.size = 12;
 Chart.defaults.plugins.tooltip.backgroundColor = '#1E293B';
-Chart.defaults.plugins.tooltip.titleColor = '#F8FAFC';
-Chart.defaults.plugins.tooltip.bodyColor = '#CBD5E1';
-Chart.defaults.plugins.tooltip.borderColor = 'rgba(255, 255, 255, 0.1)';
+Chart.defaults.plugins.tooltip.titleColor = '#FFFFFF';
+Chart.defaults.plugins.tooltip.bodyColor = '#E2E8F0';
+Chart.defaults.plugins.tooltip.borderColor = 'rgba(0, 0, 0, 0.1)';
 Chart.defaults.plugins.tooltip.borderWidth = 1;
 Chart.defaults.plugins.tooltip.padding = 10;
-Chart.defaults.plugins.tooltip.cornerRadius = 8;
-Chart.defaults.scale.grid.color = 'rgba(255, 255, 255, 0.05)';
+Chart.defaults.plugins.tooltip.cornerRadius = 6;
+Chart.defaults.scale.grid.color = 'rgba(0, 0, 0, 0.06)';
 
 const activeCharts = new Map();
 
@@ -65,7 +65,7 @@ export function renderFunnelChart(canvasId, funnelData) {
         },
         y: {
           grid: { display: false },
-          ticks: { color: '#CBD5E1', font: { weight: 500 } }
+          ticks: { color: '#1E293B', font: { weight: 600 } }
         }
       }
     }
@@ -117,7 +117,7 @@ export function renderTimelineChart(canvasId, timelineData) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'top', labels: { color: '#CBD5E1' } }
+        legend: { position: 'top', labels: { color: '#1E293B', font: { weight: 500 } } }
       },
       scales: {
         y: {
