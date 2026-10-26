@@ -164,9 +164,23 @@ class DataService {
   }
 
   /**
+   * Assigns unique stable IDs to any submissions lacking one.
+   */
+  ensureRowIds() {
+    this.rawTracker.forEach((row, i) => {
+      if (!row._id) {
+        row._id = `sub_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 6)}`;
+      }
+    });
+  }
+
+  /**
    * Add a new live response and persist it to localStorage.
    */
   addSubmission(entry) {
+    if (!entry._id) {
+      entry._id = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    }
     this.rawTracker.unshift(entry);
     this.saveToStorage();
     this.processData();
@@ -174,10 +188,41 @@ class DataService {
   }
 
   /**
+   * Update an existing submission record by its unique ID.
+   */
+  updateSubmissionById(id, updatedFields) {
+    const idx = this.rawTracker.findIndex(r => r._id === id);
+    if (idx !== -1) {
+      this.rawTracker[idx] = { ...this.rawTracker[idx], ...updatedFields };
+      this.saveToStorage();
+      this.processData();
+      this.notify();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Delete a submission record by its unique ID.
+   */
+  deleteSubmissionById(id) {
+    const idx = this.rawTracker.findIndex(r => r._id === id);
+    if (idx !== -1) {
+      this.rawTracker.splice(idx, 1);
+      this.saveToStorage();
+      this.processData();
+      this.notify();
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Normalizes roster, maps avatar images, joins submissions,
    * and computes student-level metrics.
    */
   processData() {
+    this.ensureRowIds();
     this.students.clear();
 
     // 1. Initialize all roster students

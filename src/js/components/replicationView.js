@@ -1,5 +1,6 @@
 import { dataService } from '../dataService.js';
 import { MetricsService } from '../metricsService.js';
+import { renderDatasetEditor } from './datasetEditor.js';
 
 export const METRIC_DICTIONARY = {
   placement_rate: {
@@ -215,52 +216,15 @@ export function renderReplicationGuide(container, data) {
       </div>
     </div>
 
-    <!-- Raw Data Sample Inspector -->
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <h3 class="card-title">Raw Dataset Preview (Newest 8 Submissions First)</h3>
-          <p class="card-subtitle">Live reflection of employment_tracker_synthetic.csv records currently loaded (sorted newest first)</p>
-        </div>
-      </div>
-      <div class="table-responsive">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>Candidate Name</th>
-              <th>Report Type (Col 4)</th>
-              <th>Company & Role</th>
-              <th>Stage / Condition</th>
-              <th>Compensation / Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${data.rawTracker.slice(0, 8).map(row => `
-              <tr>
-                <td style="font-size: 0.75rem; color: var(--text-muted);">${row['Timestamp']}</td>
-                <td><strong>${row['Last, First Name']}</strong></td>
-                <td>
-                  <span class="badge ${row['What are you reporting today?'] === 'Acceptance' ? 'badge-placed' : (row['What are you reporting today?'] === 'Offer' ? 'badge-offer' : 'badge-interviewing')}">
-                    ${row['What are you reporting today?']}
-                  </span>
-                </td>
-                <td style="font-size: 0.8rem;">
-                  ${row['Please list the company, position, department/division. '] || row['Please list the company and job title'] || row['Please list the company name and job title. '] || '-'}
-                </td>
-                <td style="font-size: 0.8rem;">
-                  ${row['Which interview was this? '] || row['What are the working conditions? '] || '-'}
-                </td>
-                <td style="font-size: 0.75rem; color: var(--text-muted); max-width: 250px;">
-                  ${row['What is the final offer? Please break down by salary and bonuses.'] || row['Were there any technical concepts or questions that were challenging or new to you? '] || '-'}
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <!-- Live Career Services Dataset Manager & Spreadsheet Editor -->
+    <div id="dataset-editor-container" style="margin-top: 2rem;"></div>
   `;
+
+  // Render the interactive dataset editor
+  const editorContainer = container.querySelector('#dataset-editor-container');
+  if (editorContainer) {
+    renderDatasetEditor(editorContainer, data);
+  }
 
   container.querySelectorAll('.btn-inspect-metric').forEach(btn => {
     btn.addEventListener('click', () => {

@@ -270,6 +270,91 @@
       </div>
     </div>
 
+    <!-- Career Services Staff Edit Record Modal -->
+    <div id="edit-submission-modal" class="modal-overlay" aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <h3 class="modal-title">Edit Submission Record</h3>
+            <p class="modal-subtitle">Correct employer name typos, adjust interview stages, or update compensation (Staff Admin Only)</p>
+          </div>
+          <button id="btn-close-edit-modal" class="modal-close-btn">&times;</button>
+        </div>
+        <form id="edit-submission-form" class="modal-form">
+          <input type="hidden" id="edit-submission-id">
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-student-display">Student Candidate (Col 2-3)</label>
+              <input type="text" id="edit-student-display" readonly style="background: var(--bg-secondary); cursor: not-allowed;">
+            </div>
+            <div class="form-group">
+              <label for="edit-report-type">Report Type (Col 4)</label>
+              <select id="edit-report-type" required>
+                <option value="Interview">Interview</option>
+                <option value="Offer">Job Offer</option>
+                <option value="Acceptance">Job Acceptance</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-company-role">Company, Position, Department (Cols 5 / 9 / 11) *</label>
+            <input type="text" id="edit-company-role" required placeholder="e.g. SAS Institute, Senior Data Analyst, Marketing Analytics">
+            <small style="color: var(--text-muted); font-size: 0.75rem;">Tip: Fix company spelling here to normalize employer leaderboards across the cohort.</small>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-interview-stage">Interview Stage (Col 6)</label>
+              <select id="edit-interview-stage">
+                <option value="">N/A (Not an interview)</option>
+                <option value="Recruiter Screening">Recruiter Screening</option>
+                <option value="First Round">First Round</option>
+                <option value="Second Round">Second Round</option>
+                <option value="Final Round">Final Round</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-source">How did you hear about the job? (Col 7)</label>
+              <input type="text" id="edit-source" placeholder="e.g. Institute, Alumni Network, LinkedIn">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-compensation">Final Offer Breakdown (Salary & Bonuses) (Col 12)</label>
+            <input type="text" id="edit-compensation" placeholder="e.g. $115,000 base salary, $5,000 signing bonus">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-location">Job Location (City/State) (Col 13)</label>
+              <input type="text" id="edit-location" placeholder="e.g. Raleigh, NC">
+            </div>
+            <div class="form-group">
+              <label for="edit-work-conditions">Working Conditions (Col 14)</label>
+              <select id="edit-work-conditions">
+                <option value="">Unspecified</option>
+                <option value="Hybrid">Hybrid</option>
+                <option value="Fully on-site">Fully on-site</option>
+                <option value="Remote">Remote</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-notes">Technical Concepts or Feedback (Col 8)</label>
+            <textarea id="edit-notes" rows="2" style="background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 0.65rem; color: var(--text-primary); font-family: var(--font-sans); font-size: 0.85rem; width: 100%; resize: vertical;" placeholder="Notes or feedback questions..."></textarea>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="btn-cancel-edit-modal" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save & Sync Dataset</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Notification Toast Container -->
     <div id="toast-container" class="toast-container" aria-live="polite"></div>
   </div>
