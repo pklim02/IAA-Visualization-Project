@@ -1,4 +1,5 @@
 import { dataService } from '../dataService.js';
+import { authService } from '../authService.js';
 import Papa from 'papaparse';
 
 /**
@@ -47,6 +48,17 @@ export function initFormModal() {
   const btnExport = document.getElementById('btn-export-data');
 
   function openModal() {
+    if (authService.isStudent()) {
+      const user = authService.getUser();
+      if (studentSelect) {
+        studentSelect.value = user.unityID;
+        studentSelect.disabled = true;
+      }
+    } else {
+      if (studentSelect) {
+        studentSelect.disabled = false;
+      }
+    }
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
   }
@@ -55,6 +67,7 @@ export function initFormModal() {
     modal.classList.remove('open');
     modal.setAttribute('aria-hidden', 'true');
     form.reset();
+    if (studentSelect) studentSelect.disabled = false;
     updateFieldVisibility('Interview');
   }
 

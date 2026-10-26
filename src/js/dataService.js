@@ -84,22 +84,58 @@ class DataService {
   }
 
   /**
-   * Loads both CSV datasets from the public static assets.
+   * Save tracker submissions array to persistent localStorage.
+   */
+  saveToStorage() {
+    try {
+      localStorage.setItem('iaa_tracker_data', JSON.stringify(this.rawTracker));
+    } catch (err) {
+      console.warn('LocalStorage save failed:', err);
+    }
+  }
+
+  /**
+   * Resets local storage and re-loads initial pristine synthetic CSV.
+   */
+  async resetToDefaultData() {
+    localStorage.removeItem('iaa_tracker_data');
+    const trackerRes = await fetch('/data/employment_tracker_synthetic.csv');
+    const trackerText = await trackerRes.text();
+    const trackerParsed = Papa.parse(trackerText, { header: true, skipEmptyLines: true });
+    this.rawTracker = trackerParsed.data;
+    this.saveToStorage();
+    this.processData();
+    this.notify();
+    return this.getData();
+  }
+
+  /**
+   * Loads both CSV datasets, checking persistent storage first for tracker data.
    */
   async init() {
-    const [rosterRes, trackerRes] = await Promise.all([
-      fetch('/data/student_roster.csv'),
-      fetch('/data/employment_tracker_synthetic.csv')
-    ]);
-
+    const rosterRes = await fetch('/data/student_roster.csv');
     const rosterText = await rosterRes.text();
-    const trackerText = await trackerRes.text();
-
     const rosterParsed = Papa.parse(rosterText, { header: true, skipEmptyLines: true });
-    const trackerParsed = Papa.parse(trackerText, { header: true, skipEmptyLines: true });
-
     this.roster = rosterParsed.data;
-    this.rawTracker = trackerParsed.data;
+
+    // Check persistent storage for modified or imported tracker responses
+    const savedTracker = localStorage.getItem('iaa_tracker_data');
+    if (savedTracker) {
+      try {
+        this.rawTracker = JSON.parse(savedTracker);
+      } catch {
+        this.rawTracker = [];
+      }
+    }
+
+    // If no saved tracker data, load pristine default CSV and save
+    if (!this.rawTracker || this.rawTracker.length === 0) {
+      const trackerRes = await fetch('/data/employment_tracker_synthetic.csv');
+      const trackerText = await trackerRes.text();
+      const trackerParsed = Papa.parse(trackerText, { header: true, skipEmptyLines: true });
+      this.rawTracker = trackerParsed.data;
+      this.saveToStorage();
+    }
 
     this.processData();
     this.isLoaded = true;
@@ -108,7 +144,7 @@ class DataService {
   }
 
   /**
-   * Ingest a user-uploaded CSV file.
+   * Ingest a user-uploaded CSV file and persist it.
    */
   async importTrackerCSV(file) {
     return new Promise((resolve, reject) => {
@@ -117,6 +153,7 @@ class DataService {
         skipEmptyLines: true,
         complete: (results) => {
           this.rawTracker = results.data;
+          this.saveToStorage();
           this.processData();
           this.notify();
           resolve(this.getData());
@@ -127,10 +164,11 @@ class DataService {
   }
 
   /**
-   * Add a new live response submitted via the Google Form Simulator.
+   * Add a new live response and persist it to localStorage.
    */
   addSubmission(entry) {
     this.rawTracker.unshift(entry);
+    this.saveToStorage();
     this.processData();
     this.notify();
   }

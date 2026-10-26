@@ -121,6 +121,44 @@ body {
   gap: 0.75rem;
 }
 
+/* Account Switcher Pill */
+.account-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 0.4rem 0.85rem;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.account-pill:hover {
+  background: var(--bg-surface-hover);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: var(--shadow-sm);
+}
+
+.user-role-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: rgba(204, 0, 0, 0.2);
+  color: #FF6666;
+  text-transform: uppercase;
+}
+
+.user-name {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
 .cohort-indicator {
   display: flex;
   align-items: center;
@@ -261,7 +299,7 @@ body {
   border-radius: var(--radius-full);
 }
 
-/* Main Content Area - Spacious & Clean */
+/* Main Content Area */
 .app-main {
   flex: 1;
   padding: 2.5rem;

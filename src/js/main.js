@@ -1,27 +1,93 @@
 import { dataService } from './dataService.js';
+import { authService } from './authService.js';
 import { renderOverview } from './components/overviewView.js';
 import { renderStudentDirectory } from './components/studentDirectory.js';
 import { renderReplicationGuide } from './components/replicationView.js';
-import { initFormModal } from './components/formModal.js';
+import { renderStudentPortal } from './components/studentPortalView.js';
+import { initFormModal, showToast } from './components/formModal.js';
+import { initAccountModal, updateHeaderAccountBadge } from './components/accountModal.js';
 
 let activeTab = 'overview';
 
-function updateBadgeCounts(data) {
-  const supportCountEl = document.getElementById('nav-support-count');
-  if (supportCountEl) {
-    const count = data.flaggedStudents.length;
-    supportCountEl.textContent = count;
-    supportCountEl.style.display = count > 0 ? 'inline-block' : 'none';
+function renderNavTabs() {
+  const navList = document.getElementById('nav-tabs-list');
+  if (!navList) return;
+
+  const isAdmin = authService.isAdmin();
+  const data = dataService.getData();
+  const supportCount = data.flaggedStudents?.length || 0;
+
+  if (isAdmin) {
+    if (activeTab === 'student-portal') activeTab = 'overview';
+    navList.innerHTML = `
+      <li class="nav-item">
+        <button class="nav-link ${activeTab === 'overview' ? 'active' : ''}" data-tab="overview" role="tab">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
+            <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" />
+          </svg>
+          1. Executive & Placement Outcomes
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link ${activeTab === 'students' ? 'active' : ''}" data-tab="students" role="tab">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+          </svg>
+          2. Student Pipeline & Coaching Radar
+          <span class="badge-alert" id="nav-support-count">${supportCount}</span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link ${activeTab === 'replication' ? 'active' : ''}" data-tab="replication" role="tab">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
+          </svg>
+          3. Data Dictionary & Replication Guide
+        </button>
+      </li>
+    `;
+  } else {
+    // Student role
+    if (activeTab === 'students' || activeTab === 'replication') activeTab = 'student-portal';
+    navList.innerHTML = `
+      <li class="nav-item">
+        <button class="nav-link ${activeTab === 'student-portal' ? 'active' : ''}" data-tab="student-portal" role="tab">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+          </svg>
+          My Recruitment Portal
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link ${activeTab === 'overview' ? 'active' : ''}" data-tab="overview" role="tab">
+          <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
+            <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" />
+          </svg>
+          Class Placement & Benchmarks
+        </button>
+      </li>
+    `;
   }
+
+  // Bind tab navigation click events
+  navList.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      const tab = e.currentTarget.getAttribute('data-tab');
+      if (!tab) return;
+      activeTab = tab;
+      renderNavTabs();
+      renderActiveView();
+    });
+  });
 }
 
 function renderActiveView() {
   const data = dataService.getData();
   if (!dataService.isLoaded) return;
 
-  updateBadgeCounts(data);
-
-  // Hide all views
+  // Hide all view panels
   document.querySelectorAll('.view-panel').forEach(panel => {
     panel.classList.remove('active');
   });
@@ -41,42 +107,42 @@ function renderActiveView() {
     case 'replication':
       renderReplicationGuide(activePanel, data);
       break;
+    case 'student-portal':
+      renderStudentPortal(activePanel, data);
+      break;
     default:
       renderOverview(activePanel, data);
   }
 }
 
-function initNavigation() {
-  const navLinks = document.querySelectorAll('.nav-link');
-  navLinks.forEach(link => {
-    link.addEventListener('click', (e) => {
-      const tab = e.currentTarget.getAttribute('data-tab');
-      if (!tab || tab === activeTab) return;
-
-      navLinks.forEach(l => {
-        l.classList.remove('active');
-        l.setAttribute('aria-selected', 'false');
-      });
-
-      e.currentTarget.classList.add('active');
-      e.currentTarget.setAttribute('aria-selected', 'true');
-      activeTab = tab;
-
-      renderActiveView();
-    });
-  });
-}
-
 async function startApp() {
   initFormModal();
-  initNavigation();
+  initAccountModal();
+  updateHeaderAccountBadge();
+
+  // Reset Demo Data Handler
+  document.getElementById('btn-reset-data')?.addEventListener('click', async () => {
+    if (confirm('Reset all changes and reload the pristine default synthetic dataset?')) {
+      await dataService.resetToDefaultData();
+      showToast('Reset complete: Reloaded original pristine synthetic dataset');
+    }
+  });
+
+  // Listen to role changes
+  authService.subscribe(() => {
+    updateHeaderAccountBadge();
+    renderNavTabs();
+    renderActiveView();
+  });
 
   try {
     await dataService.init();
+    renderNavTabs();
     renderActiveView();
 
-    // Re-render automatically on form submission or CSV import
+    // Auto update views on data changes
     dataService.subscribe(() => {
+      renderNavTabs();
       renderActiveView();
     });
   } catch (err) {
