@@ -329,6 +329,12 @@ body {
   color: #FFFFFF;
 }
 
+.filter-chip.chip-muted.active {
+  background-color: #64748B;
+  border-color: #64748B;
+  color: #FFFFFF;
+}
+
 .candidates-scroll {
   flex: 1;
   overflow-y: auto;

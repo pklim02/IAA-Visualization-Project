@@ -70,45 +70,38 @@ class DataService {
         }
       }
 
+      // Rule 1: Meeting Requested on most recent submission (applies to all students)
+      if (studentRows.length > 0) {
+        const sortedRows = [...studentRows].sort((a, b) => {
+          const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
+          const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
+          return tb - ta;
+        });
+        const latestRow = sortedRows[0];
+        const wantsMeeting = (latestRow['Do you want to meet with career services to discuss further?:'] || latestRow['Do you want to meet with career services to discuss further?'] || '').trim();
+        if (wantsMeeting.toLowerCase().startsWith('yes')) {
+          flags.push({ type: 'meeting_wanted', label: 'Meeting Wanted', level: 'urgent' });
+        }
+      }
+
       if (isPlaced) {
         // PLACED CANDIDATE LOGIC: Exempt from coaching, inactivity, and offer delays
         const acceptDate = acceptance['Timestamp'] ? new Date(acceptance['Timestamp']).getTime() : 0;
-
-        // Check if placed candidate requested career advisement after accepting
-        const postAcceptMeeting = studentRows.some(r => {
-          const rDate = r['Timestamp'] ? new Date(r['Timestamp']).getTime() : 0;
-          const wants = (r['Do you want to meet with career services to discuss further?:'] || r['Do you want to meet with career services to discuss further?'] || '').trim();
-          return rDate > acceptDate && wants.toLowerCase().startsWith('yes');
-        });
-        if (postAcceptMeeting) {
-          flags.push({ type: 'post_meeting', label: 'Advisement Needed', level: 'warning' });
-        }
+        const acceptDbId = acceptance._dbId || 0;
 
         // Check if candidate is still actively logging interviews after acceptance
         const postAcceptInterviews = interviews.some(r => {
           const rDate = r['Timestamp'] ? new Date(r['Timestamp']).getTime() : 0;
-          return rDate > acceptDate;
+          const rDbId = r._dbId || 0;
+          const isDateAfter = acceptDate > 0 && rDate > acceptDate;
+          const isDbAfter = acceptDbId > 0 && rDbId > acceptDbId;
+          return isDateAfter || isDbAfter;
         });
         if (postAcceptInterviews) {
-          flags.push({ type: 'withdraw_check', label: 'Withdrawal Check', level: 'info' });
+          flags.push({ type: 'withdraw_check', label: 'Withdrawal Check (Post-Acceptance)', level: 'warning' });
         }
       } else {
         // ACTIVE / SEEKING CANDIDATE LOGIC
-        // Rule 1: Meeting Requested on most recent submission
-        if (studentRows.length > 0) {
-          // Sort studentRows by timestamp descending to find latest
-          const sortedRows = [...studentRows].sort((a, b) => {
-            const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
-            const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
-            return tb - ta;
-          });
-          const latestRow = sortedRows[0];
-          const wantsMeeting = (latestRow['Do you want to meet with career services to discuss further?:'] || latestRow['Do you want to meet with career services to discuss further?'] || '').trim();
-          if (wantsMeeting.toLowerCase().startsWith('yes')) {
-            flags.push({ type: 'meeting_wanted', label: 'Meeting Wanted', level: 'urgent' });
-          }
-        }
-
         // Rule 2: Holding Offer > 4 Days without decision
         const hasStagnantOffer = offers.some(r => {
           const rDate = r['Timestamp'] ? new Date(r['Timestamp']).getTime() : 0;
@@ -322,7 +315,8 @@ class DataService {
         multiOffer: this.students.filter(s => s.attentionFlags.some(f => f.type === 'multi_offer')).length,
         closingSupport: this.students.filter(s => s.attentionFlags.some(f => f.type === 'closing_support')).length,
         screeningPolish: this.students.filter(s => s.attentionFlags.some(f => f.type === 'screening_polish')).length,
-        stalled: this.students.filter(s => s.attentionFlags.some(f => f.type === 'stalled')).length
+        stalled: this.students.filter(s => s.attentionFlags.some(f => f.type === 'stalled')).length,
+        withdrawCheck: this.students.filter(s => s.attentionFlags.some(f => f.type === 'withdraw_check')).length
       }
     };
   }

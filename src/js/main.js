@@ -26,6 +26,8 @@ function getAttentionBadgeClass(level) {
 
 function getAttentionGuidance(flag) {
   switch (flag.type) {
+    case 'withdraw_check':
+      return 'Candidate accepted an offer but continues logging interview rounds. Recommended: Remind candidate to formally and politely withdraw from other companies\' interview loops.';
     case 'closing_support':
       return 'Candidate has reached > 2 final rounds with 0 offers. Recommended: Schedule 1-on-1 mock interview and final-round presentation coaching.';
     case 'offer_decision':
@@ -34,10 +36,6 @@ function getAttentionGuidance(flag) {
       return 'Candidate is holding 2 or more concurrent active offers. Recommended: Decision matrix coaching to prioritize offers gracefully.';
     case 'meeting_wanted':
       return 'Candidate explicitly requested a meeting with Career Services in their latest submission.';
-    case 'post_meeting':
-      return 'Placed candidate requested a follow-up consultation regarding their accepted offer.';
-    case 'withdraw_check':
-      return 'Placed candidate has interviews logged after acceptance. Recommended: Remind candidate to formally withdraw from remaining interview loops.';
     case 'screening_polish':
       return 'Candidate has completed 4+ recruiter screenings without advancing to second or final rounds. Recommended: Review 30-second pitch and resume alignment.';
     case 'stalled':
@@ -79,12 +77,20 @@ function renderOverview(container, data) {
 
     if (attentionFilter === 'needs_attention') {
       return s.attentionFlag !== null;
-    } else if (attentionFilter === 'meeting') {
-      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'meeting_wanted' || f.type === 'post_meeting');
-    } else if (attentionFilter === 'offer_decision') {
-      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'offer_decision');
+    } else if (attentionFilter === 'withdraw_check') {
+      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'withdraw_check');
     } else if (attentionFilter === 'closing') {
       return s.attentionFlags && s.attentionFlags.some(f => f.type === 'closing_support');
+    } else if (attentionFilter === 'meeting') {
+      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'meeting_wanted');
+    } else if (attentionFilter === 'offer_decision') {
+      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'offer_decision');
+    } else if (attentionFilter === 'multi_offer') {
+      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'multi_offer');
+    } else if (attentionFilter === 'screening_polish') {
+      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'screening_polish');
+    } else if (attentionFilter === 'stalled') {
+      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'stalled');
     }
     return true;
   });
@@ -217,6 +223,16 @@ function renderOverview(container, data) {
             <button class="filter-chip chip-attention ${attentionFilter === 'needs_attention' ? 'active' : ''}" data-filter="needs_attention">
               Needs Attention (${attentionCounts.totalNeedsAttention || 0})
             </button>
+            ${(attentionCounts.withdrawCheck || 0) > 0 ? `
+              <button class="filter-chip chip-warning ${attentionFilter === 'withdraw_check' ? 'active' : ''}" data-filter="withdraw_check">
+                Post-Acceptance (${attentionCounts.withdrawCheck})
+              </button>
+            ` : ''}
+            ${(attentionCounts.closingSupport || 0) > 0 ? `
+              <button class="filter-chip chip-urgent ${attentionFilter === 'closing' ? 'active' : ''}" data-filter="closing">
+                Closing (${attentionCounts.closingSupport})
+              </button>
+            ` : ''}
             ${(attentionCounts.meetingWanted || 0) > 0 ? `
               <button class="filter-chip chip-urgent ${attentionFilter === 'meeting' ? 'active' : ''}" data-filter="meeting">
                 Meetings (${attentionCounts.meetingWanted})
@@ -227,9 +243,19 @@ function renderOverview(container, data) {
                 Offers &gt; 4d (${attentionCounts.offerImpending})
               </button>
             ` : ''}
-            ${(attentionCounts.closingSupport || 0) > 0 ? `
-              <button class="filter-chip chip-urgent ${attentionFilter === 'closing' ? 'active' : ''}" data-filter="closing">
-                Closing (${attentionCounts.closingSupport})
+            ${(attentionCounts.multiOffer || 0) > 0 ? `
+              <button class="filter-chip chip-info ${attentionFilter === 'multi_offer' ? 'active' : ''}" data-filter="multi_offer">
+                Multi-Offer (${attentionCounts.multiOffer})
+              </button>
+            ` : ''}
+            ${(attentionCounts.screeningPolish || 0) > 0 ? `
+              <button class="filter-chip chip-warning ${attentionFilter === 'screening_polish' ? 'active' : ''}" data-filter="screening_polish">
+                Screening (${attentionCounts.screeningPolish})
+              </button>
+            ` : ''}
+            ${(attentionCounts.stalled || 0) > 0 ? `
+              <button class="filter-chip chip-muted ${attentionFilter === 'stalled' ? 'active' : ''}" data-filter="stalled">
+                Stalled (${attentionCounts.stalled})
               </button>
             ` : ''}
           </div>
@@ -524,49 +550,74 @@ function renderAnalytics(container, data) {
         </div>
 
         <div class="attention-kpi-grid">
+          <!-- 1. Post-Acceptance Interviewing / Withdrawal Check -->
+          <div class="attention-kpi-card kpi-warning" data-jump="withdraw_check">
+            <div class="kpi-card-header">
+              <span class="kpi-card-badge badge-attention-warning">Withdrawal Check</span>
+              <span class="kpi-card-count">${attention.withdrawCheck || 0}</span>
+            </div>
+            <div class="kpi-card-desc">Placed candidate logged an interview after accepting an offer. Needs prompt to politely withdraw from other pipelines.</div>
+            <button class="kpi-jump-btn" data-jump="withdraw_check">View Candidates &rarr;</button>
+          </div>
+
+          <!-- 2. Closing Support -->
           <div class="attention-kpi-card kpi-urgent" data-jump="closing">
             <div class="kpi-card-header">
               <span class="kpi-card-badge badge-attention-urgent">Closing Support</span>
-              <span class="kpi-card-count">${attention.closingSupport}</span>
+              <span class="kpi-card-count">${attention.closingSupport || 0}</span>
             </div>
             <div class="kpi-card-desc">&gt; 2 Final Rounds and 0 Offers received. Needs 1-on-1 presentation / mock interview coaching.</div>
             <button class="kpi-jump-btn" data-jump="closing">View Candidates &rarr;</button>
           </div>
 
+          <!-- 3. Decision Needed -->
           <div class="attention-kpi-card kpi-warning" data-jump="offer_decision">
             <div class="kpi-card-header">
               <span class="kpi-card-badge badge-attention-warning">Decision Needed</span>
-              <span class="kpi-card-count">${attention.offerImpending}</span>
+              <span class="kpi-card-count">${attention.offerImpending || 0}</span>
             </div>
             <div class="kpi-card-desc">Holding an unaccepted offer for &gt; 4 days. Needs offer deadline check &amp; negotiation guidance.</div>
             <button class="kpi-jump-btn" data-jump="offer_decision">View Candidates &rarr;</button>
           </div>
 
+          <!-- 4. Meeting Wanted -->
           <div class="attention-kpi-card kpi-urgent" data-jump="meeting">
             <div class="kpi-card-header">
               <span class="kpi-card-badge badge-attention-urgent">Meeting Wanted</span>
-              <span class="kpi-card-count">${attention.meetingWanted}</span>
+              <span class="kpi-card-count">${attention.meetingWanted || 0}</span>
             </div>
-            <div class="kpi-card-desc">Candidate explicitly requested a 1-on-1 Career Services meeting in their latest submission.</div>
+            <div class="kpi-card-desc">Candidate explicitly requested a 1-on-1 Career Services meeting in their submission.</div>
             <button class="kpi-jump-btn" data-jump="meeting">View Candidates &rarr;</button>
           </div>
 
-          <div class="attention-kpi-card kpi-info" data-jump="needs_attention">
+          <!-- 5. Multi-Offer Review -->
+          <div class="attention-kpi-card kpi-info" data-jump="multi_offer">
             <div class="kpi-card-header">
               <span class="kpi-card-badge badge-attention-info">Multi-Offer Review</span>
-              <span class="kpi-card-count">${attention.multiOffer}</span>
+              <span class="kpi-card-count">${attention.multiOffer || 0}</span>
             </div>
             <div class="kpi-card-desc">Candidate is holding 2 or more active concurrent offers. Needs decision prioritization.</div>
-            <button class="kpi-jump-btn" data-jump="needs_attention">View Candidates &rarr;</button>
+            <button class="kpi-jump-btn" data-jump="multi_offer">View Candidates &rarr;</button>
           </div>
 
-          <div class="attention-kpi-card kpi-muted" data-jump="needs_attention">
+          <!-- 6. Screening Polish -->
+          <div class="attention-kpi-card kpi-warning" data-jump="screening_polish">
+            <div class="kpi-card-header">
+              <span class="kpi-card-badge badge-attention-warning">Screening Polish</span>
+              <span class="kpi-card-count">${attention.screeningPolish || 0}</span>
+            </div>
+            <div class="kpi-card-desc">Candidate completed 4+ recruiter screenings without reaching advanced rounds. Needs pitch review.</div>
+            <button class="kpi-jump-btn" data-jump="screening_polish">View Candidates &rarr;</button>
+          </div>
+
+          <!-- 7. Stalled (30+ Days) -->
+          <div class="attention-kpi-card kpi-muted" data-jump="stalled">
             <div class="kpi-card-header">
               <span class="kpi-card-badge badge-attention-muted">Stalled (30+ Days)</span>
-              <span class="kpi-card-count">${attention.stalled}</span>
+              <span class="kpi-card-count">${attention.stalled || 0}</span>
             </div>
             <div class="kpi-card-desc">Active candidate has logged zero recruitment activity in the past 30 days. Needs check-in.</div>
-            <button class="kpi-jump-btn" data-jump="needs_attention">View Candidates &rarr;</button>
+            <button class="kpi-jump-btn" data-jump="stalled">View Candidates &rarr;</button>
           </div>
         </div>
       </div>
@@ -729,6 +780,14 @@ function renderStudentEntry(container, students) {
               <label class="form-label">Technical Concepts or Questions (Notes)</label>
               <textarea id="f-interview-notes" class="form-input" rows="3" placeholder="e.g. SQL window functions, CTEs, machine learning case study"></textarea>
             </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label">Meet with Career Services to discuss this interview?</label>
+              <select id="f-interview-meeting" class="form-input form-select">
+                <option value="No">No</option>
+                <option value="Yes">Yes, schedule a session</option>
+              </select>
+            </div>
           </div>
 
           <!-- Dynamic Branch 2: Offer -->
@@ -738,7 +797,7 @@ function renderStudentEntry(container, students) {
               <input type="text" id="f-offer-company" class="form-input" placeholder="e.g. Evernight Financial, Data Scientist">
             </div>
             <div class="form-group" style="margin-bottom: 1.25rem;">
-              <label class="form-label">Meet with Career Services to discuss? *</label>
+              <label class="form-label">Meet with Career Services to discuss this offer? *</label>
               <select id="f-offer-meeting" class="form-input form-select">
                 <option value="No">No</option>
                 <option value="Yes">Yes, schedule a session</option>
@@ -769,6 +828,13 @@ function renderStudentEntry(container, students) {
                   <option value="Remote">Remote</option>
                 </select>
               </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label class="form-label">Meet with Career Services to discuss this acceptance?</label>
+              <select id="f-accept-meeting" class="form-input form-select">
+                <option value="No">No</option>
+                <option value="Yes">Yes, schedule a session</option>
+              </select>
             </div>
           </div>
 
@@ -824,7 +890,14 @@ function renderStudentEntry(container, students) {
 
     const repType = typeSelect?.value || 'Interview';
     const now = new Date();
-    const formattedDate = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    let effectiveDate = now;
+    if (stu.isPlaced && stu.acceptanceRecord && stu.acceptanceRecord['Timestamp']) {
+      const accTime = new Date(stu.acceptanceRecord['Timestamp']).getTime();
+      if (!isNaN(accTime) && accTime >= effectiveDate.getTime()) {
+        effectiveDate = new Date(accTime + (60 * 1000)); // 1 minute after acceptance
+      }
+    }
+    const formattedDate = `${effectiveDate.getMonth() + 1}/${effectiveDate.getDate()}/${effectiveDate.getFullYear()} ${effectiveDate.getHours()}:${String(effectiveDate.getMinutes()).padStart(2, '0')}:${String(effectiveDate.getSeconds()).padStart(2, '0')}`;
 
     const newRow = {
       'Timestamp': formattedDate,
@@ -848,6 +921,7 @@ function renderStudentEntry(container, students) {
       newRow['Which interview was this? '] = container.querySelector('#f-interview-stage')?.value || 'First Round';
       newRow['How did you hear about the job?'] = container.querySelector('#f-interview-source')?.value || 'Institute';
       newRow['Were there any technical concepts or questions that were challenging or new to you? '] = container.querySelector('#f-interview-notes')?.value || '';
+      newRow['Do you want to meet with career services to discuss further?:'] = container.querySelector('#f-interview-meeting')?.value || 'No';
     } else if (repType === 'Offer') {
       newRow['Please list the company and job title'] = container.querySelector('#f-offer-company')?.value || '';
       newRow['Do you want to meet with career services to discuss further?:'] = container.querySelector('#f-offer-meeting')?.value || 'No';
@@ -856,6 +930,7 @@ function renderStudentEntry(container, students) {
       newRow['What is the final offer? Please break down by salary and bonuses.'] = container.querySelector('#f-accept-comp')?.value || '';
       newRow['Where is the job located (city/state)? '] = container.querySelector('#f-accept-location')?.value || '';
       newRow['What are the working conditions? '] = container.querySelector('#f-accept-conditions')?.value || 'Hybrid';
+      newRow['Do you want to meet with career services to discuss further?:'] = container.querySelector('#f-accept-meeting')?.value || 'No';
     }
 
     try {

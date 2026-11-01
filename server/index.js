@@ -92,6 +92,7 @@ function rowToRecord(row, idx) {
 function recordToRow(r) {
   return {
     _id: r._id,
+    _dbId: r.id,
     'Timestamp': r.timestamp,
     'Email Address': r.email,
     'Last, First Name': r.name,
