@@ -4,6 +4,7 @@ let currentMode = 'overview'; // 'overview' | 'student-entry'
 let selectedUnityID = null;
 let entryUnityID = null;
 let searchTerm = '';
+let attentionFilter = 'all'; // 'all' | 'needs_attention' | 'meeting' | 'offer_decision' | 'closing'
 
 function getStatusBadgeClass(status) {
   switch (status) {
@@ -11,6 +12,38 @@ function getStatusBadgeClass(status) {
     case 'Has Offer': return 'badge-offer';
     case 'Interviewing': return 'badge-interviewing';
     default: return 'badge-seeking';
+  }
+}
+
+function getAttentionBadgeClass(level) {
+  switch (level) {
+    case 'urgent': return 'badge-attention-urgent';
+    case 'warning': return 'badge-attention-warning';
+    case 'info': return 'badge-attention-info';
+    default: return 'badge-attention-muted';
+  }
+}
+
+function getAttentionGuidance(flag) {
+  switch (flag.type) {
+    case 'closing_support':
+      return 'Candidate has reached > 2 final rounds with 0 offers. Recommended: Schedule 1-on-1 mock interview and final-round presentation coaching.';
+    case 'offer_decision':
+      return 'Candidate has held an unaccepted offer for > 4 days. Recommended: Confirm offer expiration timeline and assist with decision evaluation or negotiation.';
+    case 'multi_offer':
+      return 'Candidate is holding 2 or more concurrent active offers. Recommended: Decision matrix coaching to prioritize offers gracefully.';
+    case 'meeting_wanted':
+      return 'Candidate explicitly requested a meeting with Career Services in their latest submission.';
+    case 'post_meeting':
+      return 'Placed candidate requested a follow-up consultation regarding their accepted offer.';
+    case 'withdraw_check':
+      return 'Placed candidate has interviews logged after acceptance. Recommended: Remind candidate to formally withdraw from remaining interview loops.';
+    case 'screening_polish':
+      return 'Candidate has completed 4+ recruiter screenings without advancing to second or final rounds. Recommended: Review 30-second pitch and resume alignment.';
+    case 'stalled':
+      return 'Candidate has logged zero recruitment activity in the past 30 days. Recommended: Wellness and job search check-in.';
+    default:
+      return '';
   }
 }
 
@@ -27,12 +60,33 @@ function escapeHtml(str) {
 /** ----------------------------------------------------
  *  MODE 1: CANDIDATE OVERVIEW (2-COLUMN MASTER-DETAIL)
  *  ---------------------------------------------------- */
-function renderOverview(container, students) {
-  // Filter candidates by name or unityID
+function renderOverview(container, data) {
+  const students = data.students || [];
+  const attentionCounts = data.attention || {
+    totalNeedsAttention: 0,
+    meetingWanted: 0,
+    offerImpending: 0,
+    closingSupport: 0
+  };
+
+  // Filter candidates by search term AND attention filter
   const filteredStudents = students.filter(s => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return s.name.toLowerCase().includes(term) || s.unityID.toLowerCase().includes(term);
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      const matches = s.name.toLowerCase().includes(term) || s.unityID.toLowerCase().includes(term);
+      if (!matches) return false;
+    }
+
+    if (attentionFilter === 'needs_attention') {
+      return s.attentionFlag !== null;
+    } else if (attentionFilter === 'meeting') {
+      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'meeting_wanted' || f.type === 'post_meeting');
+    } else if (attentionFilter === 'offer_decision') {
+      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'offer_decision');
+    } else if (attentionFilter === 'closing') {
+      return s.attentionFlags && s.attentionFlags.some(f => f.type === 'closing_support');
+    }
+    return true;
   });
 
   // Ensure selected student exists
@@ -156,11 +210,34 @@ function renderOverview(container, students) {
             placeholder="Filter candidates..." 
             value="${escapeHtml(searchTerm)}"
           />
+          <div class="attention-filter-strip">
+            <button class="filter-chip ${attentionFilter === 'all' ? 'active' : ''}" data-filter="all">
+              All (${students.length})
+            </button>
+            <button class="filter-chip chip-attention ${attentionFilter === 'needs_attention' ? 'active' : ''}" data-filter="needs_attention">
+              Needs Attention (${attentionCounts.totalNeedsAttention || 0})
+            </button>
+            ${(attentionCounts.meetingWanted || 0) > 0 ? `
+              <button class="filter-chip chip-urgent ${attentionFilter === 'meeting' ? 'active' : ''}" data-filter="meeting">
+                Meetings (${attentionCounts.meetingWanted})
+              </button>
+            ` : ''}
+            ${(attentionCounts.offerImpending || 0) > 0 ? `
+              <button class="filter-chip chip-warning ${attentionFilter === 'offer_decision' ? 'active' : ''}" data-filter="offer_decision">
+                Offers &gt; 4d (${attentionCounts.offerImpending})
+              </button>
+            ` : ''}
+            ${(attentionCounts.closingSupport || 0) > 0 ? `
+              <button class="filter-chip chip-urgent ${attentionFilter === 'closing' ? 'active' : ''}" data-filter="closing">
+                Closing (${attentionCounts.closingSupport})
+              </button>
+            ` : ''}
+          </div>
         </div>
 
         <div class="candidates-scroll">
           ${filteredStudents.length === 0 ? `
-            <div class="empty-candidates">No candidates match your search.</div>
+            <div class="empty-candidates">No candidates match the selected filter.</div>
           ` : filteredStudents.map(s => `
             <div 
               class="candidate-row ${s.unityID === selectedUnityID ? 'selected' : ''}" 
@@ -178,6 +255,15 @@ function renderOverview(container, students) {
                   <span class="candidate-unity">${escapeHtml(s.unityID)}</span>
                   <span class="status-badge ${getStatusBadgeClass(s.status)}">${s.status}</span>
                 </div>
+                ${s.attentionFlags && s.attentionFlags.length > 0 ? `
+                  <div class="candidate-flags-stack">
+                    ${s.attentionFlags.map(f => `
+                      <span class="attention-badge ${getAttentionBadgeClass(f.level)}" title="${escapeHtml(f.label)}">
+                        ${escapeHtml(f.label)}
+                      </span>
+                    `).join('')}
+                  </div>
+                ` : ''}
               </div>
             </div>
           `).join('')}
@@ -203,9 +289,38 @@ function renderOverview(container, students) {
                 <span>${escapeHtml(selectedStudent.email)}</span>
                 <span class="dot">&bull;</span>
                 <span>Status: <span class="status-badge ${getStatusBadgeClass(selectedStudent.status)}">${selectedStudent.status}</span></span>
+                ${selectedStudent.attentionFlags && selectedStudent.attentionFlags.length > 0 ? `
+                  <span class="dot">&bull;</span>
+                  <span class="dossier-flags-stack">
+                    ${selectedStudent.attentionFlags.map(f => `
+                      <span class="attention-badge ${getAttentionBadgeClass(f.level)}">${escapeHtml(f.label)}</span>
+                    `).join(' ')}
+                  </span>
+                ` : ''}
               </div>
             </div>
           </div>
+
+          <!-- Attention Alert Box (If Flagged - Stacks All Active Signals) -->
+          ${selectedStudent.attentionFlags && selectedStudent.attentionFlags.length > 0 ? `
+            <div class="card attention-alert-box alert-stacked">
+              <div class="alert-title-row">
+                <strong class="alert-title-text">
+                  Career Services Action Recommended (${selectedStudent.attentionFlags.length} active flag${selectedStudent.attentionFlags.length > 1 ? 's' : ''})
+                </strong>
+              </div>
+              <div class="alert-items-stack">
+                ${selectedStudent.attentionFlags.map(f => `
+                  <div class="alert-item alert-${f.level}">
+                    <div class="alert-item-header">
+                      <span class="attention-badge ${getAttentionBadgeClass(f.level)}">${escapeHtml(f.label)}</span>
+                    </div>
+                    <p class="alert-guidance">${escapeHtml(getAttentionGuidance(f))}</p>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
 
           <!-- SUMMARY Section -->
           <div class="card summary-card">
@@ -253,6 +368,15 @@ function renderOverview(container, students) {
     }
   });
 
+  // Attention filter chips click handler
+  container.querySelectorAll('.filter-chip').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      attentionFilter = btn.getAttribute('data-filter') || 'all';
+      renderApp();
+    });
+  });
+
   // Candidate selection click handler
   container.querySelectorAll('.candidate-row').forEach(row => {
     row.addEventListener('click', () => {
@@ -263,7 +387,256 @@ function renderOverview(container, students) {
 }
 
 /** ----------------------------------------------------
- *  MODE 2: STUDENT ENTRY VIEW (SINGLE PAGE FORM)
+ *  MODE 2: CLASS ANALYTICS (AGGREGATED COHORT VISUALS)
+ *  ---------------------------------------------------- */
+function renderAnalytics(container, data) {
+  const total = data.totalStudents || 75;
+  const placedCount = data.placedCount || 0;
+  const offerCount = data.offerCount || 0;
+  const interviewCount = data.interviewingCount || 0;
+  const seekingCount = data.seekingCount || 0;
+
+  const placedPct = total > 0 ? Math.round((placedCount / total) * 100) : 0;
+  const offerPct = total > 0 ? Math.round((offerCount / total) * 100) : 0;
+  const interviewPct = total > 0 ? Math.round((interviewCount / total) * 100) : 0;
+  const seekingPct = Math.max(0, 100 - placedPct - offerPct - interviewPct);
+
+  const funnel = data.funnel || { screening: 0, roundOneTwo: 0, finalRound: 0, offers: 0, acceptance: 0 };
+  const attention = data.attention || {
+    totalNeedsAttention: 0,
+    meetingWanted: 0,
+    offerImpending: 0,
+    closingSupport: 0,
+    multiOffer: 0,
+    screeningPolish: 0,
+    stalled: 0
+  };
+
+  const topCompanies = data.topCompanies || [];
+  const topSources = data.topSources || [];
+  const maxCompanyCount = topCompanies.length > 0 ? topCompanies[0].count : 1;
+  const totalSourcesCount = topSources.reduce((acc, s) => acc + s.count, 0) || 1;
+
+  container.innerHTML = `
+    <div class="analytics-page">
+      <div class="analytics-header">
+        <div>
+          <h2 class="analytics-title">Cohort Recruitment Analytics</h2>
+          <div class="analytics-sub">Class of 2027 &bull; ${total} Total Candidates &bull; ${data.totalSubmissions} Logged Activity Records</div>
+        </div>
+      </div>
+
+      <!-- VISUAL 1: COHORT PLACEMENT MILESTONE GAUGE -->
+      <div class="card analytics-card">
+        <div class="card-header-clean">
+          <h3 class="section-title">1. Cohort Placement Progress (${placedPct}% Placed)</h3>
+          <span class="card-meta-tag">${placedCount} of ${total} Candidates Placed</span>
+        </div>
+
+        <!-- Horizontal Segmented Progress Bar -->
+        <div class="milestone-bar-container">
+          <div class="milestone-segment seg-placed" style="width: ${placedPct}%;" title="Placed: ${placedCount} (${placedPct}%)"></div>
+          <div class="milestone-segment seg-offer" style="width: ${offerPct}%;" title="Holding Offer: ${offerCount} (${offerPct}%)"></div>
+          <div class="milestone-segment seg-interview" style="width: ${interviewPct}%;" title="Interviewing: ${interviewCount} (${interviewPct}%)"></div>
+          <div class="milestone-segment seg-seeking" style="width: ${seekingPct}%;" title="Seeking: ${seekingCount} (${seekingPct}%)"></div>
+        </div>
+
+        <!-- Milestone Legend / Stats -->
+        <div class="milestone-legend-grid">
+          <div class="legend-box item-placed">
+            <div class="legend-color-dot dot-placed"></div>
+            <div>
+              <div class="legend-val">${placedCount} <span class="legend-pct">(${placedPct}%)</span></div>
+              <div class="legend-label">Placed (Accepted)</div>
+            </div>
+          </div>
+          <div class="legend-box item-offer">
+            <div class="legend-color-dot dot-offer"></div>
+            <div>
+              <div class="legend-val">${offerCount} <span class="legend-pct">(${offerPct}%)</span></div>
+              <div class="legend-label">Holding Offers</div>
+            </div>
+          </div>
+          <div class="legend-box item-interview">
+            <div class="legend-color-dot dot-interview"></div>
+            <div>
+              <div class="legend-val">${interviewCount} <span class="legend-pct">(${interviewPct}%)</span></div>
+              <div class="legend-label">Actively Interviewing</div>
+            </div>
+          </div>
+          <div class="legend-box item-seeking">
+            <div class="legend-color-dot dot-seeking"></div>
+            <div>
+              <div class="legend-val">${seekingCount} <span class="legend-pct">(${seekingPct}%)</span></div>
+              <div class="legend-label">Seeking Opportunities</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISUAL 2: RECRUITMENT PIPELINE FUNNEL HEALTH -->
+      <div class="card analytics-card">
+        <h3 class="section-title">2. Recruitment Pipeline Conversion Funnel</h3>
+        <div class="funnel-grid">
+          <div class="funnel-step">
+            <div class="funnel-step-num">${funnel.screening}</div>
+            <div class="funnel-step-name">Recruiter Screenings</div>
+            <div class="funnel-step-sub">Initial touches</div>
+          </div>
+          <div class="funnel-arrow">&rarr;</div>
+
+          <div class="funnel-step">
+            <div class="funnel-step-num">${funnel.roundOneTwo}</div>
+            <div class="funnel-step-name">Technical / 1st &amp; 2nd</div>
+            <div class="funnel-step-sub">In-depth evaluations</div>
+          </div>
+          <div class="funnel-arrow">&rarr;</div>
+
+          <div class="funnel-step">
+            <div class="funnel-step-num">${funnel.finalRound}</div>
+            <div class="funnel-step-name">Final Rounds</div>
+            <div class="funnel-step-sub">Superdays &amp; onsite</div>
+          </div>
+          <div class="funnel-arrow">&rarr;</div>
+
+          <div class="funnel-step step-offer">
+            <div class="funnel-step-num">${funnel.offers}</div>
+            <div class="funnel-step-name">Offers Extended</div>
+            <div class="funnel-step-sub">Formal job offers</div>
+          </div>
+          <div class="funnel-arrow">&rarr;</div>
+
+          <div class="funnel-step step-placed">
+            <div class="funnel-step-num">${funnel.acceptance}</div>
+            <div class="funnel-step-name">Offers Accepted</div>
+            <div class="funnel-step-sub">Secured placements</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISUAL 3: COHORT ATTENTION & EARLY WARNING QUEUE -->
+      <div class="card analytics-card">
+        <div class="card-header-clean">
+          <h3 class="section-title">3. Early Warning &amp; Candidate Intervention Queue</h3>
+          <span class="card-meta-tag ${attention.totalNeedsAttention > 0 ? 'tag-warning' : 'tag-neutral'}">
+            ${attention.totalNeedsAttention} Candidates Requiring Support
+          </span>
+        </div>
+
+        <div class="attention-kpi-grid">
+          <div class="attention-kpi-card kpi-urgent" data-jump="closing">
+            <div class="kpi-card-header">
+              <span class="kpi-card-badge badge-attention-urgent">Closing Support</span>
+              <span class="kpi-card-count">${attention.closingSupport}</span>
+            </div>
+            <div class="kpi-card-desc">&gt; 2 Final Rounds and 0 Offers received. Needs 1-on-1 presentation / mock interview coaching.</div>
+            <button class="kpi-jump-btn" data-jump="closing">View Candidates &rarr;</button>
+          </div>
+
+          <div class="attention-kpi-card kpi-warning" data-jump="offer_decision">
+            <div class="kpi-card-header">
+              <span class="kpi-card-badge badge-attention-warning">Decision Needed</span>
+              <span class="kpi-card-count">${attention.offerImpending}</span>
+            </div>
+            <div class="kpi-card-desc">Holding an unaccepted offer for &gt; 4 days. Needs offer deadline check &amp; negotiation guidance.</div>
+            <button class="kpi-jump-btn" data-jump="offer_decision">View Candidates &rarr;</button>
+          </div>
+
+          <div class="attention-kpi-card kpi-urgent" data-jump="meeting">
+            <div class="kpi-card-header">
+              <span class="kpi-card-badge badge-attention-urgent">Meeting Wanted</span>
+              <span class="kpi-card-count">${attention.meetingWanted}</span>
+            </div>
+            <div class="kpi-card-desc">Candidate explicitly requested a 1-on-1 Career Services meeting in their latest submission.</div>
+            <button class="kpi-jump-btn" data-jump="meeting">View Candidates &rarr;</button>
+          </div>
+
+          <div class="attention-kpi-card kpi-info" data-jump="needs_attention">
+            <div class="kpi-card-header">
+              <span class="kpi-card-badge badge-attention-info">Multi-Offer Review</span>
+              <span class="kpi-card-count">${attention.multiOffer}</span>
+            </div>
+            <div class="kpi-card-desc">Candidate is holding 2 or more active concurrent offers. Needs decision prioritization.</div>
+            <button class="kpi-jump-btn" data-jump="needs_attention">View Candidates &rarr;</button>
+          </div>
+
+          <div class="attention-kpi-card kpi-muted" data-jump="needs_attention">
+            <div class="kpi-card-header">
+              <span class="kpi-card-badge badge-attention-muted">Stalled (30+ Days)</span>
+              <span class="kpi-card-count">${attention.stalled}</span>
+            </div>
+            <div class="kpi-card-desc">Active candidate has logged zero recruitment activity in the past 30 days. Needs check-in.</div>
+            <button class="kpi-jump-btn" data-jump="needs_attention">View Candidates &rarr;</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISUAL 4: TOP HIRING PARTNERS & CHANNEL YIELD -->
+      <div class="analytics-dual-row">
+        <!-- Top Employers -->
+        <div class="card analytics-card">
+          <h3 class="section-title">4A. Top Hiring &amp; Offer Partners</h3>
+          ${topCompanies.length === 0 ? `
+            <div class="empty-stream">No employer offers recorded yet.</div>
+          ` : `
+            <div class="leaderboard-list">
+              ${topCompanies.map(c => `
+                <div class="leaderboard-row">
+                  <div class="leaderboard-meta">
+                    <span class="leaderboard-name">${escapeHtml(c.name)}</span>
+                    <span class="leaderboard-count">${c.count} ${c.count === 1 ? 'offer' : 'offers'}</span>
+                  </div>
+                  <div class="leaderboard-track">
+                    <div class="leaderboard-bar" style="width: ${(c.count / maxCompanyCount) * 100}%;"></div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+
+        <!-- Sourcing Channels -->
+        <div class="card analytics-card">
+          <h3 class="section-title">4B. Interview Sourcing Channels</h3>
+          ${topSources.length === 0 ? `
+            <div class="empty-stream">No interview sources recorded yet.</div>
+          ` : `
+            <div class="leaderboard-list">
+              ${topSources.map(s => {
+                const pct = Math.round((s.count / totalSourcesCount) * 100);
+                return `
+                  <div class="leaderboard-row">
+                    <div class="leaderboard-meta">
+                      <span class="leaderboard-name">${escapeHtml(s.name)}</span>
+                      <span class="leaderboard-count">${s.count} (${pct}%)</span>
+                    </div>
+                    <div class="leaderboard-track">
+                      <div class="leaderboard-bar bar-teal" style="width: ${pct}%;"></div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Bind Jump-to-Overview buttons from Attention cards
+  container.querySelectorAll('.kpi-jump-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const jumpFilter = btn.getAttribute('data-jump') || 'all';
+      attentionFilter = jumpFilter;
+      currentMode = 'overview';
+      renderApp();
+    });
+  });
+}
+
+/** ----------------------------------------------------
+ *  MODE 3: STUDENT ENTRY VIEW (SINGLE PAGE FORM)
  *  ---------------------------------------------------- */
 function renderStudentEntry(container, students) {
   if (!entryUnityID && students.length > 0) {
@@ -502,23 +875,24 @@ function renderStudentEntry(container, students) {
  *  ---------------------------------------------------- */
 function renderApp() {
   const container = document.getElementById('app-body');
-  const btnToggle = document.getElementById('btn-toggle-view');
   if (!container) return;
 
   const data = dataService.getData();
 
-  if (btnToggle) {
-    if (currentMode === 'overview') {
-      btnToggle.innerHTML = 'Student Entry Form &rarr;';
-      btnToggle.classList.remove('btn-active-mode');
+  // Update navigation tab states
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    const mode = tab.getAttribute('data-mode');
+    if (mode === currentMode) {
+      tab.classList.add('active');
     } else {
-      btnToggle.innerHTML = '&larr; Candidate Overview';
-      btnToggle.classList.add('btn-active-mode');
+      tab.classList.remove('active');
     }
-  }
+  });
 
   if (currentMode === 'overview') {
-    renderOverview(container, data.students);
+    renderOverview(container, data);
+  } else if (currentMode === 'analytics') {
+    renderAnalytics(container, data);
   } else {
     renderStudentEntry(container, data.students);
   }
@@ -529,11 +903,13 @@ async function start() {
   const fileInput = document.getElementById('csv-file-input');
   const btnUpload = document.getElementById('btn-upload-csv');
   const btnClear = document.getElementById('btn-clear-data');
-  const btnToggle = document.getElementById('btn-toggle-view');
 
-  btnToggle?.addEventListener('click', () => {
-    currentMode = currentMode === 'overview' ? 'student-entry' : 'overview';
-    renderApp();
+  // Navigation tabs click handler
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentMode = tab.getAttribute('data-mode') || 'overview';
+      renderApp();
+    });
   });
 
   btnUpload?.addEventListener('click', () => fileInput?.click());
@@ -544,7 +920,6 @@ async function start() {
     fileInput.value = '';
     try {
       await dataService.importCSV(file);
-      currentMode = 'overview';
       renderApp();
     } catch (err) {
       alert(`Import error: ${err.message}`);

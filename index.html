@@ -21,11 +21,20 @@
         </div>
       </div>
 
-      <div class="header-actions">
-        <button id="btn-toggle-view" class="btn btn-mode" title="Switch between Candidate Overview and Student Self-Reporting">
-          Student Entry Form &rarr;
+      <!-- Navigation Mode Switcher -->
+      <nav class="header-nav">
+        <button id="nav-overview" class="nav-tab active" data-mode="overview">
+          Candidate Overview
         </button>
+        <button id="nav-analytics" class="nav-tab" data-mode="analytics">
+          Class Analytics
+        </button>
+        <button id="nav-entry" class="nav-tab" data-mode="student-entry">
+          Student Entry Form
+        </button>
+      </nav>
 
+      <div class="header-actions">
         <button id="btn-upload-csv" class="btn btn-primary" title="Import synthetic or live recruitment CSV">
           Import CSV
         </button>
