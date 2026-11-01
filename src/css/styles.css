@@ -1605,9 +1605,14 @@ body {
    DATABASE RECORDS VIEW
    -------------------------------------------------------------------------- */
 .db-records-page {
-  padding: 1.5rem 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  flex: 1;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 2.25rem 4rem 2.25rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .db-header-row {
@@ -1682,16 +1687,21 @@ body {
   border-radius: 8px;
   overflow-x: auto;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 3rem;
 }
 
 .db-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.825rem;
   text-align: left;
 }
 
 .db-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   background-color: #F8FAFC;
   color: #475569;
   font-weight: 700;
@@ -1699,7 +1709,7 @@ body {
   font-size: 0.725rem;
   letter-spacing: 0.04em;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 2px solid #E2E8F0;
   white-space: nowrap;
 }
 
@@ -1718,6 +1728,29 @@ body {
   white-space: nowrap;
   display: flex;
   gap: 0.4rem;
+}
+
+.location-pill {
+  display: inline-block;
+  font-size: 0.75rem;
+  color: #334155;
+  background-color: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.conditions-pill {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #0369A1;
+  background-color: #E0F2FE;
+  border: 1px solid #BAE6FD;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
 .btn-action-edit {

@@ -1,5 +1,12 @@
 import Papa from 'papaparse';
 
+export function normalizeCompanyName(raw) {
+  if (!raw) return '';
+  let comp = raw.split(',')[0].trim();
+  comp = comp.replace(/[.;]+$/, '').trim();
+  return comp;
+}
+
 export function getWarningLabel(type) {
   switch (type) {
     case 'withdraw_check': return 'Withdrawal Check (Post-Acceptance)';
@@ -7,7 +14,7 @@ export function getWarningLabel(type) {
     case 'offer_decision': return 'Decision Needed (>4d)';
     case 'meeting_wanted': return 'Meeting Wanted';
     case 'multi_offer': return 'Multi-Offer Review';
-    case 'screening_polish': return 'Screening Polish';
+    case 'screening_polish': return 'Screening Polish (>2 Screenings)';
     case 'stalled': return 'Stalled (30+ Days)';
     default: return type;
   }
@@ -180,26 +187,59 @@ class DataService {
           flags.push({ type: 'closing_support', label: 'Closing Support (>2 Finals)', level: 'urgent', occurredAt, occurredTime });
         }
 
-        // Rule 5: Screening Drop-off (>= 4 screenings and 0 advanced rounds)
-        const screenings = interviews.filter(r => {
-          const stage = r['Which interview was this? '] || r['Which interview was this?'] || '';
-          return stage.toLowerCase().includes('screen');
-        }).sort((a, b) => {
-          const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
-          const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
-          return tb - ta;
-        });
+        // Rule 5: Screening Polish (> 2 distinct company screenings and 0 advanced rounds)
+        const companyPipelines = new Map();
 
-        const advancedCount = interviews.filter(r => {
-          const stage = r['Which interview was this? '] || r['Which interview was this?'] || '';
-          return /second|final/i.test(stage);
-        }).length;
+        for (const r of interviews) {
+          const rawComp = r['Please list the company, position, department/division. '] || r['Please list the company, position, department/division.'] || '';
+          const cleanComp = normalizeCompanyName(rawComp);
+          if (!cleanComp) continue;
+          const key = cleanComp.toLowerCase();
 
-        if (screenings.length >= 4 && advancedCount === 0) {
-          const latest = screenings[0];
-          const occurredAt = latest['Timestamp'] || '';
-          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : 0;
-          flags.push({ type: 'screening_polish', label: 'Screening Polish', level: 'warning', occurredAt, occurredTime });
+          const stage = (r['Which interview was this? '] || r['Which interview was this?'] || '').toLowerCase();
+          const isScreening = stage.includes('screen');
+          const isAdvanced = /second|final/i.test(stage);
+          const ts = r['Timestamp'] ? new Date(r['Timestamp']).getTime() : 0;
+          const tsStr = r['Timestamp'] || '';
+
+          if (!companyPipelines.has(key)) {
+            companyPipelines.set(key, { companyName: cleanComp, hasScreening: false, hasAdvanced: false, latestTs: 0, latestTsStr: '' });
+          }
+          const pipe = companyPipelines.get(key);
+          if (isScreening) pipe.hasScreening = true;
+          if (isAdvanced) pipe.hasAdvanced = true;
+          if (ts >= pipe.latestTs) {
+            pipe.latestTs = ts;
+            pipe.latestTsStr = tsStr;
+          }
+        }
+
+        // Also check offers: an offer from that company counts as advanced
+        for (const r of offers) {
+          const rawComp = r['Please list the company and job title'] || '';
+          const cleanComp = normalizeCompanyName(rawComp);
+          if (!cleanComp) continue;
+          const key = cleanComp.toLowerCase();
+          if (companyPipelines.has(key)) {
+            companyPipelines.get(key).hasAdvanced = true;
+          }
+        }
+
+        const screenedCompanies = Array.from(companyPipelines.values()).filter(p => p.hasScreening);
+        const advancedScreenedCompanies = screenedCompanies.filter(p => p.hasAdvanced);
+
+        if (screenedCompanies.length > 2 && advancedScreenedCompanies.length === 0) {
+          screenedCompanies.sort((a, b) => b.latestTs - a.latestTs);
+          const latest = screenedCompanies[0];
+          const occurredAt = latest.latestTsStr || '';
+          const occurredTime = latest.latestTs || 0;
+          flags.push({
+            type: 'screening_polish',
+            label: 'Screening Polish (>2 Screenings)',
+            level: 'warning',
+            occurredAt,
+            occurredTime
+          });
         }
 
         // Rule 6: Inactive / Stalled (0 activity in past 30 days)
@@ -401,6 +441,37 @@ class DataService {
     await this.fetchData();
     this.notify();
     return this.getData();
+  }
+
+  /**
+   * Suggest previous companies/roles for autocomplete
+   */
+  getCompanySuggestions(unityID = null) {
+    const studentCompSet = new Set();
+    const globalCompSet = new Set();
+
+    for (const r of this.submissions) {
+      const email = (r['Email Address'] || '').toLowerCase().trim();
+      const rawComp = r['Please list the company, position, department/division. '] 
+        || r['Please list the company, position, department/division.'] 
+        || r['Please list the company and job title'] 
+        || r['Please list the company name and job title. '] 
+        || r['Please list the company name and job title.'] 
+        || '';
+      const cleanComp = normalizeCompanyName(rawComp);
+      if (!cleanComp) continue;
+
+      if (unityID && email.startsWith(unityID.toLowerCase())) {
+        studentCompSet.add(cleanComp);
+      } else {
+        globalCompSet.add(cleanComp);
+      }
+    }
+
+    return {
+      studentCompanies: Array.from(studentCompSet).sort(),
+      globalCompanies: Array.from(globalCompSet).sort()
+    };
   }
 
   getData() {

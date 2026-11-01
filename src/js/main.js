@@ -37,7 +37,7 @@ function getAttentionGuidance(flag) {
     case 'meeting_wanted':
       return 'Candidate explicitly requested a meeting with Career Services in their latest submission.';
     case 'screening_polish':
-      return 'Candidate has completed 4+ recruiter screenings without advancing to second or final rounds. Recommended: Review 30-second pitch and resume alignment.';
+      return 'Candidate has completed > 2 company screenings without advancing to second or final rounds. Recommended: Review 30-second pitch and resume alignment.';
     case 'stalled':
       return 'Candidate has logged zero recruitment activity in the past 30 days. Recommended: Wellness and job search check-in.';
     default:
@@ -734,7 +734,7 @@ function renderAnalytics(container, data) {
               <span class="kpi-card-badge badge-attention-warning">Screening Polish</span>
               <span class="kpi-card-count">${attention.screeningPolish || 0}</span>
             </div>
-            <div class="kpi-card-desc">Candidate completed 4+ recruiter screenings without reaching advanced rounds. Needs pitch review.</div>
+            <div class="kpi-card-desc">&gt; 2 Company screenings without advancing to second or final rounds. Needs pitch review.</div>
             <button class="kpi-jump-btn" data-jump="screening_polish">View Candidates &rarr;</button>
           </div>
 
@@ -822,6 +822,7 @@ function renderStudentEntry(container, students) {
     entryUnityID = selectedUnityID || students[0].unityID;
   }
   const currentStudent = students.find(s => s.unityID === entryUnityID) || students[0];
+  const suggestions = dataService.getCompanySuggestions(currentStudent?.unityID);
 
   container.innerHTML = `
     <div class="entry-page">
@@ -832,6 +833,12 @@ function renderStudentEntry(container, students) {
         </div>
 
         <form id="student-submission-form">
+          <!-- Autocomplete Company Suggestions -->
+          <datalist id="entry-company-suggestions">
+            ${suggestions.studentCompanies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} (Previously logged)</option>`).join('')}
+            ${suggestions.globalCompanies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+          </datalist>
+
           <!-- Identity Dropdown -->
           <div class="form-group" style="margin-bottom: 1.5rem;">
             <label for="entry-student-select" class="form-label">Select Who You Are (Unity ID) *</label>
@@ -877,7 +884,7 @@ function renderStudentEntry(container, students) {
           <div id="branch-interview" class="form-branch">
             <div class="form-group" style="margin-bottom: 1.25rem;">
               <label class="form-label">Company, Position, Department/Division *</label>
-              <input type="text" id="f-interview-company" class="form-input" placeholder="e.g. Lumarion Health, Marketing Analytics Analyst, Risk Management" required>
+              <input type="text" id="f-interview-company" class="form-input" list="entry-company-suggestions" placeholder="e.g. Lumarion Health, Marketing Analytics Analyst, Risk Management" required>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
@@ -922,7 +929,7 @@ function renderStudentEntry(container, students) {
           <div id="branch-offer" class="form-branch" style="display: none;">
             <div class="form-group" style="margin-bottom: 1.25rem;">
               <label class="form-label">Company and Job Title *</label>
-              <input type="text" id="f-offer-company" class="form-input" placeholder="e.g. Evernight Financial, Data Scientist">
+              <input type="text" id="f-offer-company" class="form-input" list="entry-company-suggestions" placeholder="e.g. Evernight Financial, Data Scientist">
             </div>
             <div class="form-group" style="margin-bottom: 1.25rem;">
               <label class="form-label">Meet with Career Services to discuss this offer? *</label>
@@ -937,7 +944,7 @@ function renderStudentEntry(container, students) {
           <div id="branch-acceptance" class="form-branch" style="display: none;">
             <div class="form-group" style="margin-bottom: 1.25rem;">
               <label class="form-label">Company Name and Job Title *</label>
-              <input type="text" id="f-accept-company" class="form-input" placeholder="e.g. Ventrali Energy, Data Scientist I">
+              <input type="text" id="f-accept-company" class="form-input" list="entry-company-suggestions" placeholder="e.g. Ventrali Energy, Data Scientist I">
             </div>
             <div class="form-group" style="margin-bottom: 1.25rem;">
               <label class="form-label">Final Offer Breakdown (Salary &amp; Bonus) *</label>
@@ -1099,7 +1106,10 @@ function renderDatabaseRecords(container, data) {
       const comp1 = (r['Please list the company, position, department/division. '] || r['Please list the company, position, department/division.'] || '').toLowerCase();
       const comp2 = (r['Please list the company and job title'] || '').toLowerCase();
       const comp3 = (r['Please list the company name and job title. '] || r['Please list the company name and job title.'] || '').toLowerCase();
-      return name.includes(q) || email.includes(q) || comp1.includes(q) || comp2.includes(q) || comp3.includes(q);
+      const loc = (r['Where is the job located (city/state)? '] || r['Where is the job located (city/state)?'] || '').toLowerCase();
+      const cond = (r['What are the working conditions? '] || r['What are the working conditions?'] || '').toLowerCase();
+      const notes = (r['Were there any technical concepts or questions that were challenging or new to you? '] || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || comp1.includes(q) || comp2.includes(q) || comp3.includes(q) || loc.includes(q) || cond.includes(q) || notes.includes(q);
     }
     return true;
   });
@@ -1167,13 +1177,17 @@ function renderDatabaseRecords(container, data) {
                 <th>Type</th>
                 <th>Company &amp; Role</th>
                 <th>Stage / Details</th>
+                <th>Location</th>
+                <th>Conditions</th>
+                <th>Source</th>
+                <th>Technical Notes</th>
                 <th>Wants Meeting</th>
                 <th style="text-align: right;">Actions</th>
               </tr>
             </thead>
             <tbody>
               ${filteredSubmissions.length === 0 ? `
-                <tr><td colspan="8" style="text-align: center; padding: 2rem; color: #94A3B8;">No submission rows match your filters.</td></tr>
+                <tr><td colspan="12" style="text-align: center; padding: 2rem; color: #94A3B8;">No submission rows match your filters.</td></tr>
               ` : filteredSubmissions.map(r => {
                 const type = (r['What are you reporting today?'] || 'Interview').trim();
                 let compRole = '';
@@ -1189,6 +1203,10 @@ function renderDatabaseRecords(container, data) {
                   details = r['Which interview was this? '] || r['Which interview was this?'] || '';
                 }
                 const wants = r['Do you want to meet with career services to discuss further?:'] || r['Do you want to meet with career services to discuss further?'] || 'No';
+                const loc = r['Where is the job located (city/state)? '] || r['Where is the job located (city/state)?'] || '';
+                const cond = r['What are the working conditions? '] || r['What are the working conditions?'] || '';
+                const source = r['How did you hear about the job?'] || '';
+                const notes = r['Were there any technical concepts or questions that were challenging or new to you? '] || r['Were there any technical concepts or questions that were challenging or new to you?'] || '';
 
                 return `
                   <tr>
@@ -1201,6 +1219,14 @@ function renderDatabaseRecords(container, data) {
                     <td><span class="stream-tag tag-${type.toLowerCase()}">${escapeHtml(type)}</span></td>
                     <td>${escapeHtml(compRole)}</td>
                     <td>${escapeHtml(details)}</td>
+                    <td>${loc ? `<span class="location-pill">${escapeHtml(loc)}</span>` : '<span style="color: #94A3B8;">-</span>'}</td>
+                    <td>${cond ? `<span class="conditions-pill">${escapeHtml(cond)}</span>` : '<span style="color: #94A3B8;">-</span>'}</td>
+                    <td>${source ? escapeHtml(source) : '<span style="color: #94A3B8;">-</span>'}</td>
+                    <td>
+                      <div style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(notes)}">
+                        ${notes ? escapeHtml(notes) : '<span style="color: #94A3B8;">-</span>'}
+                      </div>
+                    </td>
                     <td>
                       ${wants.toLowerCase().startsWith('yes') ? `
                         <span class="attention-badge badge-attention-urgent">Yes</span>
@@ -1492,9 +1518,16 @@ function openSubmissionModal(existingRow, students) {
   let comp = '';
   let stage = '';
   let notes = '';
+  let location = '';
+  let conditions = 'Hybrid';
+  let source = 'Institute';
   let wants = isEdit ? (existingRow['Do you want to meet with career services to discuss further?:'] || existingRow['Do you want to meet with career services to discuss further?'] || 'No') : 'No';
 
   if (isEdit) {
+    location = existingRow['Where is the job located (city/state)? '] || existingRow['Where is the job located (city/state)?'] || '';
+    conditions = existingRow['What are the working conditions? '] || existingRow['What are the working conditions?'] || 'Hybrid';
+    source = existingRow['How did you hear about the job?'] || 'Institute';
+
     if (repType === 'Acceptance') {
       comp = existingRow['Please list the company name and job title. '] || existingRow['Please list the company name and job title.'] || '';
       stage = existingRow['What is the final offer? Please break down by salary and bonuses.'] || '';
@@ -1508,6 +1541,9 @@ function openSubmissionModal(existingRow, students) {
     }
   }
 
+  const selectedStudentObj = students.find(s => s.email.toLowerCase() === email.toLowerCase()) || students[0];
+  const initialSuggestions = dataService.getCompanySuggestions(selectedStudentObj?.unityID);
+
   root.innerHTML = `
     <div class="db-modal-overlay">
       <div class="db-modal-content">
@@ -1516,6 +1552,11 @@ function openSubmissionModal(existingRow, students) {
           <button class="db-modal-close">&times;</button>
         </div>
         <div class="db-modal-body">
+          <datalist id="modal-sub-company-suggestions">
+            ${initialSuggestions.studentCompanies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} (Previously logged)</option>`).join('')}
+            ${initialSuggestions.globalCompanies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+          </datalist>
+
           <div class="form-group">
             <label class="form-label">Candidate *</label>
             <select id="modal-sub-student" class="form-input form-select" ${isEdit ? 'disabled' : ''}>
@@ -1538,12 +1579,41 @@ function openSubmissionModal(existingRow, students) {
 
           <div class="form-group">
             <label class="form-label">Company &amp; Position *</label>
-            <input type="text" id="modal-sub-comp" class="form-input" value="${escapeHtml(comp)}" placeholder="e.g. Bank of America, Senior Data Scientist" />
+            <input type="text" id="modal-sub-comp" class="form-input" list="modal-sub-company-suggestions" value="${escapeHtml(comp)}" placeholder="e.g. Bank of America, Senior Data Scientist" />
           </div>
 
           <div class="form-group">
             <label class="form-label">Stage / Compensation Details</label>
             <input type="text" id="modal-sub-stage" class="form-input" value="${escapeHtml(stage)}" placeholder="e.g. Final Round or $115,000 + $10,000 bonus" />
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label">Job Location (City/State)</label>
+              <input type="text" id="modal-sub-location" class="form-input" value="${escapeHtml(location)}" placeholder="e.g. Philadelphia, PA or Raleigh, NC" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Working Conditions</label>
+              <select id="modal-sub-conditions" class="form-input form-select">
+                <option value="Hybrid" ${conditions === 'Hybrid' ? 'selected' : ''}>Hybrid</option>
+                <option value="Fully on-site" ${conditions === 'Fully on-site' ? 'selected' : ''}>Fully on-site</option>
+                <option value="Remote" ${conditions === 'Remote' ? 'selected' : ''}>Remote</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Job Source</label>
+            <select id="modal-sub-source" class="form-input form-select">
+              <option value="Institute" ${source === 'Institute' ? 'selected' : ''}>Institute (Career Services)</option>
+              <option value="Alumni" ${source === 'Alumni' ? 'selected' : ''}>Alumni</option>
+              <option value="LinkedIn" ${source === 'LinkedIn' ? 'selected' : ''}>LinkedIn</option>
+              <option value="Company website" ${source === 'Company website' ? 'selected' : ''}>Company website</option>
+              <option value="Recruiter reached out" ${source === 'Recruiter reached out' ? 'selected' : ''}>Recruiter reached out</option>
+              <option value="Referral from a friend" ${source === 'Referral from a friend' ? 'selected' : ''}>Referral from a friend</option>
+              <option value="Career fair" ${source === 'Career fair' ? 'selected' : ''}>Career fair</option>
+            </select>
           </div>
 
           <div class="form-group">
@@ -1567,6 +1637,18 @@ function openSubmissionModal(existingRow, students) {
     </div>
   `;
 
+  root.querySelector('#modal-sub-student')?.addEventListener('change', (e) => {
+    const unity = e.target.value;
+    const suggs = dataService.getCompanySuggestions(unity);
+    const dlist = root.querySelector('#modal-sub-company-suggestions');
+    if (dlist) {
+      dlist.innerHTML = `
+        ${suggs.studentCompanies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)} (Previously logged)</option>`).join('')}
+        ${suggs.globalCompanies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+      `;
+    }
+  });
+
   root.querySelector('.db-modal-close')?.addEventListener('click', () => { root.innerHTML = ''; });
   root.querySelector('.db-modal-cancel')?.addEventListener('click', () => { root.innerHTML = ''; });
   root.querySelector('#modal-save-sub-btn')?.addEventListener('click', async () => {
@@ -1578,6 +1660,9 @@ function openSubmissionModal(existingRow, students) {
     const newType = root.querySelector('#modal-sub-type')?.value || 'Interview';
     const newComp = root.querySelector('#modal-sub-comp')?.value || '';
     const newStage = root.querySelector('#modal-sub-stage')?.value || '';
+    const newLocation = root.querySelector('#modal-sub-location')?.value || '';
+    const newConditions = root.querySelector('#modal-sub-conditions')?.value || 'Hybrid';
+    const newSource = root.querySelector('#modal-sub-source')?.value || 'Institute';
     const newNotes = root.querySelector('#modal-sub-notes')?.value || '';
     const newWants = root.querySelector('#modal-sub-wants')?.value || 'No';
 
@@ -1586,21 +1671,21 @@ function openSubmissionModal(existingRow, students) {
       'Email Address': sEmail,
       'Last, First Name': sName,
       'What are you reporting today?': newType,
-      'Do you want to meet with career services to discuss further?:': newWants
+      'Do you want to meet with career services to discuss further?:': newWants,
+      'Where is the job located (city/state)? ': newLocation,
+      'What are the working conditions? ': newConditions,
+      'How did you hear about the job?': newSource,
+      'Were there any technical concepts or questions that were challenging or new to you? ': newNotes
     };
 
     if (newType === 'Acceptance') {
       rowPayload['Please list the company name and job title. '] = newComp;
       rowPayload['What is the final offer? Please break down by salary and bonuses.'] = newStage;
-      rowPayload['Where is the job located (city/state)? '] = 'Raleigh, NC';
-      rowPayload['What are the working conditions? '] = 'Hybrid';
     } else if (newType === 'Offer') {
       rowPayload['Please list the company and job title'] = newComp;
     } else {
       rowPayload['Please list the company, position, department/division. '] = newComp;
       rowPayload['Which interview was this? '] = newStage || 'First Round';
-      rowPayload['How did you hear about the job?'] = 'Institute';
-      rowPayload['Were there any technical concepts or questions that were challenging or new to you? '] = newNotes;
     }
 
     try {
