@@ -1,178 +1,111 @@
 import Papa from 'papaparse';
 
-/**
- * Parses compensation string into numeric base, bonus, and total first-year compensation.
- * Handles patterns such as:
- * - "$122,500 base salary, $5,000 signing bonus"
- * - "$97,000 base salary, no bonus"
- * - "$108,000 base salary, $3,000 relocation"
- * - "$122,000 base salary, 5% annual performance bonus"
- */
-export function parseCompensation(str) {
-  if (!str) {
-    return { base: 0, bonus: 0, total: 0, bonusType: 'none', bonusLabel: 'No Bonus ($0)', raw: '' };
-  }
-
-  let base = 0;
-  let bonus = 0;
-  let bonusType = 'none';
-  let bonusLabel = 'No Bonus ($0)';
-
-  // 1. Extract base salary ($xxx,xxx or xxx,xxx base or xxxk)
-  const baseMatch = str.match(/\$([0-9,]+)\s*(?:base|salary)?/i) || str.match(/([0-9,]{5,})\s*(?:base|salary)/i);
-  if (baseMatch) {
-    base = parseInt(baseMatch[1].replace(/,/g, ''), 10) || 0;
-  } else {
-    const kMatch = str.match(/\$?([0-9.]+)\s*k\s*(?:base|salary)?/i);
-    if (kMatch) {
-      base = Math.round(parseFloat(kMatch[1]) * 1000);
-    }
-  }
-
-  // 2. Extract percentage bonus (e.g. 12% annual performance bonus)
-  const pctMatch = str.match(/([0-9.]+)%\s*(?:annual\s*)?(?:performance\s*)?bonus/i);
-  if (pctMatch && base > 0) {
-    const pct = parseFloat(pctMatch[1]);
-    bonus = Math.round(base * (pct / 100));
-    bonusType = 'performance';
-    bonusLabel = `${pct}% Performance Bonus ($${bonus.toLocaleString()})`;
-  } else {
-    // 3. Extract lump sum signing / relocation bonus ($x,xxx)
-    const lumpMatch = str.match(/\$([0-9,]+)\s*(signing bonus|relocation|sign on|bonus)/i);
-    if (lumpMatch) {
-      bonus = parseInt(lumpMatch[1].replace(/,/g, ''), 10) || 0;
-      const typeStr = lumpMatch[2].toLowerCase();
-      bonusType = typeStr.includes('relocation') ? 'relocation' : 'signing';
-      bonusLabel = `$${bonus.toLocaleString()} ${typeStr.includes('relocation') ? 'Relocation' : 'Signing Bonus'}`;
-    }
-  }
-
-  return {
-    base,
-    bonus,
-    bonusType,
-    bonusLabel,
-    total: base + bonus,
-    raw: str.trim()
-  };
-}
-
-/**
- * Normalizes company and job title from various form fields.
- */
-export function parseCompanyRole(row) {
-  const rawText = 
-    row['Please list the company, position, department/division. '] ||
-    row['Please list the company and job title'] ||
-    row['Please list the company name and job title. '] ||
-    '';
-
-  const parts = rawText.split(',').map(s => s.trim()).filter(Boolean);
-  const company = parts[0] || 'Unspecified Employer';
-  const role = parts[1] || 'Analytics Specialist';
-  const department = parts[2] || 'Analytics & Insights';
-
-  return { company, role, department, rawText };
-}
-
 class DataService {
   constructor() {
-    this.students = new Map(); // UnityID -> Student Object
-    this.roster = [];
-    this.rawTracker = [];
-    this.subscribers = [];
+    this.students = [];      // Array of student objects
+    this.submissions = [];   // Array of raw CSV rows
+    this.listeners = [];
     this.isLoaded = false;
   }
 
-  /**
-   * Subscribe to dataset change events (e.g. new form submission or CSV reload).
-   */
-  subscribe(fn) {
-    this.subscribers.push(fn);
+  subscribe(callback) {
+    this.listeners.push(callback);
     return () => {
-      this.subscribers = this.subscribers.filter(sub => sub !== fn);
+      this.listeners = this.listeners.filter(cb => cb !== callback);
     };
   }
 
   notify() {
-    const data = this.getData();
-    this.subscribers.forEach(fn => fn(data));
+    this.listeners.forEach(cb => cb(this.getData()));
   }
 
-  /**
-   * Save tracker submissions array to persistent localStorage.
-   */
-  saveToStorage() {
-    try {
-      localStorage.setItem('iaa_tracker_data', JSON.stringify(this.rawTracker));
-    } catch (err) {
-      console.warn('LocalStorage save failed:', err);
-    }
-  }
-
-  /**
-   * Resets local storage and re-loads initial pristine synthetic CSV.
-   */
-  async resetToDefaultData() {
-    localStorage.removeItem('iaa_tracker_data');
-    const trackerRes = await fetch('/data/employment_tracker_synthetic.csv');
-    const trackerText = await trackerRes.text();
-    const trackerParsed = Papa.parse(trackerText, { header: true, skipEmptyLines: true });
-    this.rawTracker = trackerParsed.data;
-    this.saveToStorage();
-    this.processData();
-    this.notify();
-    return this.getData();
-  }
-
-  /**
-   * Loads both CSV datasets, checking persistent storage first for tracker data.
-   */
   async init() {
-    const rosterRes = await fetch('/data/student_roster.csv');
-    const rosterText = await rosterRes.text();
-    const rosterParsed = Papa.parse(rosterText, { header: true, skipEmptyLines: true });
-    this.roster = rosterParsed.data;
-
-    // Check persistent storage for modified or imported tracker responses
-    const savedTracker = localStorage.getItem('iaa_tracker_data');
-    if (savedTracker) {
-      try {
-        this.rawTracker = JSON.parse(savedTracker);
-      } catch {
-        this.rawTracker = [];
-      }
-    }
-
-    // If no saved tracker data, load pristine default CSV and save
-    if (!this.rawTracker || this.rawTracker.length === 0) {
-      const trackerRes = await fetch('/data/employment_tracker_synthetic.csv');
-      const trackerText = await trackerRes.text();
-      const trackerParsed = Papa.parse(trackerText, { header: true, skipEmptyLines: true });
-      this.rawTracker = trackerParsed.data;
-      this.saveToStorage();
-    }
-
-    this.processData();
+    await this.fetchData();
     this.isLoaded = true;
     this.notify();
     return this.getData();
   }
 
+  async fetchData() {
+    // 1. Fetch official student roster from SQLite
+    const stuRes = await fetch('/api/students');
+    const stuList = stuRes.ok ? await stuRes.json() : [];
+
+    // 2. Fetch raw submissions from SQLite
+    const subRes = await fetch('/api/submissions');
+    this.submissions = subRes.ok ? await subRes.json() : [];
+
+    // 3. Link submissions to each student using purely discrete counts (zero regex, zero parsing)
+    this.students = stuList.map(stu => {
+      const email = (stu.email || '').toLowerCase().trim();
+      const studentRows = this.submissions.filter(r => (r['Email Address'] || '').toLowerCase().trim() === email);
+
+      const interviews = studentRows.filter(r => (r['What are you reporting today?'] || '').trim() === 'Interview');
+      const offers = studentRows.filter(r => (r['What are you reporting today?'] || '').trim() === 'Offer');
+      const acceptance = studentRows.find(r => (r['What are you reporting today?'] || '').trim() === 'Acceptance') || null;
+
+      // Pure status determination
+      let status = 'Seeking';
+      if (acceptance) {
+        status = 'Placed';
+      } else if (offers.length > 0) {
+        status = 'Has Offer';
+      } else if (interviews.length > 0) {
+        status = 'Interviewing';
+      }
+
+      return {
+        unityID: stu.unityID,
+        name: stu.name,
+        email: stu.email,
+        avatarUrl: stu.avatarUrl || `/data/avatars/${stu.unityID}.png`,
+        status,
+        interviewCount: interviews.length,
+        offerCount: offers.length,
+        isPlaced: !!acceptance,
+        acceptanceRecord: acceptance,
+        history: studentRows // Keep full raw chronological rows
+      };
+    });
+  }
+
   /**
-   * Ingest a user-uploaded CSV file and persist it.
+   * Add a single new submission row into SQLite
    */
-  async importTrackerCSV(file) {
+  async addSubmission(row) {
+    const res = await fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(row)
+    });
+    if (!res.ok) throw new Error('Failed to save submission to SQLite');
+    await this.fetchData();
+    this.notify();
+    return this.getData();
+  }
+
+  /**
+   * Import CSV and persist directly into SQLite
+   */
+  async importCSV(file) {
     return new Promise((resolve, reject) => {
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        complete: (results) => {
-          this.rawTracker = results.data;
-          this.saveToStorage();
-          this.processData();
-          this.notify();
-          resolve(this.getData());
+        complete: async (results) => {
+          try {
+            const res = await fetch('/api/submissions/import', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(results.data)
+            });
+            if (!res.ok) throw new Error('Failed to import into SQLite');
+            await this.fetchData();
+            this.notify();
+            resolve(this.getData());
+          } catch (err) {
+            reject(err);
+          }
         },
         error: (err) => reject(err)
       });
@@ -180,267 +113,25 @@ class DataService {
   }
 
   /**
-   * Assigns unique stable IDs to any submissions lacking one.
+   * Clear all submissions from SQLite (reset to 0)
    */
-  ensureRowIds() {
-    this.rawTracker.forEach((row, i) => {
-      if (!row._id) {
-        row._id = `sub_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 6)}`;
-      }
-    });
-  }
-
-  /**
-   * Add a new live response and persist it to localStorage.
-   */
-  addSubmission(entry) {
-    if (!entry._id) {
-      entry._id = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    }
-    this.rawTracker.unshift(entry);
-    this.saveToStorage();
-    this.processData();
+  async clearAll() {
+    const res = await fetch('/api/submissions/clear', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to clear submissions in SQLite');
+    this.submissions = [];
+    await this.fetchData();
     this.notify();
+    return this.getData();
   }
 
-  /**
-   * Update an existing submission record by its unique ID.
-   */
-  updateSubmissionById(id, updatedFields) {
-    const idx = this.rawTracker.findIndex(r => r._id === id);
-    if (idx !== -1) {
-      this.rawTracker[idx] = { ...this.rawTracker[idx], ...updatedFields };
-      this.saveToStorage();
-      this.processData();
-      this.notify();
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Delete a submission record by its unique ID.
-   */
-  deleteSubmissionById(id) {
-    const idx = this.rawTracker.findIndex(r => r._id === id);
-    if (idx !== -1) {
-      this.rawTracker.splice(idx, 1);
-      this.saveToStorage();
-      this.processData();
-      this.notify();
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Normalizes roster, maps avatar images, joins submissions,
-   * and computes student-level metrics.
-   */
-  processData() {
-    this.ensureRowIds();
-    this.students.clear();
-
-    // 1. Initialize all roster students
-    this.roster.forEach(item => {
-      const name = (item['Last, First Name'] || '').trim();
-      const unityID = (item['UnityID'] || '').trim().toLowerCase();
-      if (!unityID) return;
-
-      this.students.set(unityID, {
-        unityID,
-        name,
-        email: `${unityID}@ncsu.edu`,
-        avatarUrl: `/data/avatars/${unityID}.png`,
-        status: 'Seeking', // Seeking | Interviewing | Has Offer | Placed
-        interviews: [],
-        offers: [],
-        acceptance: null,
-        totalInterviews: 0,
-        screensCount: 0,
-        firstRoundsCount: 0,
-        secondRoundsCount: 0,
-        finalRoundsCount: 0,
-        offersCount: 0,
-        highestStage: 'None',
-        supportFlags: [],
-        meetingRequested: false,
-        lastActivityDate: null
-      });
-    });
-
-    // 2. Map submissions to students
-    this.rawTracker.forEach(row => {
-      const email = (row['Email Address'] || '').trim().toLowerCase();
-      const unityID = email.split('@')[0];
-      const student = this.students.get(unityID);
-
-      const reportType = (row['What are you reporting today?'] || '').trim();
-      const timestamp = (row['Timestamp'] || '').trim();
-      const date = timestamp ? new Date(timestamp) : new Date();
-
-      const { company, role, department } = parseCompanyRole(row);
-      const stage = (row['Which interview was this? '] || '').trim();
-      const source = (row['How did you hear about the job?'] || '').trim() || 'Unspecified';
-      const notes = (row['Were there any technical concepts or questions that were challenging or new to you? '] || '').trim();
-      const wantsMeeting = (row['Do you want to meet with career services to discuss further?:'] || '').trim().toLowerCase() === 'yes';
-      const compStr = row['What is the final offer? Please break down by salary and bonuses.'] || '';
-      const compensation = parseCompensation(compStr);
-      const location = (row['Where is the job located (city/state)? '] || '').trim();
-      const workingConditions = (row['What are the working conditions? '] || '').trim();
-
-      const record = {
-        timestamp,
-        date,
-        reportType,
-        company,
-        role,
-        department,
-        stage,
-        source,
-        notes,
-        wantsMeeting,
-        compensation,
-        location,
-        workingConditions,
-        raw: row
-      };
-
-      if (student) {
-        if (!student.lastActivityDate || date > student.lastActivityDate) {
-          student.lastActivityDate = date;
-        }
-
-        if (wantsMeeting) {
-          student.meetingRequested = true;
-        }
-
-        if (reportType === 'Interview') {
-          student.interviews.push(record);
-          student.totalInterviews += 1;
-
-          if (stage === 'Recruiter Screening') student.screensCount += 1;
-          else if (stage === 'First Round') student.firstRoundsCount += 1;
-          else if (stage === 'Second Round') student.secondRoundsCount += 1;
-          else if (stage === 'Final Round') student.finalRoundsCount += 1;
-        } else if (reportType === 'Offer') {
-          student.offers.push(record);
-          student.offersCount += 1;
-        } else if (reportType === 'Acceptance') {
-          student.acceptance = record;
-        }
-      }
-    });
-
-    // 3. Compute student statuses and support intervention flags
-    this.students.forEach(student => {
-      // Determine overall status
-      if (student.acceptance) {
-        student.status = 'Placed';
-        student.highestStage = 'Offer Accepted';
-      } else if (student.offersCount > 0) {
-        student.status = 'Has Offer';
-        student.highestStage = 'Job Offer Received';
-      } else if (student.totalInterviews > 0) {
-        student.status = 'Interviewing';
-        if (student.finalRoundsCount > 0) student.highestStage = 'Final Round';
-        else if (student.secondRoundsCount > 0) student.highestStage = 'Second Round';
-        else if (student.firstRoundsCount > 0) student.highestStage = 'First Round';
-        else student.highestStage = 'Recruiter Screen';
-      } else {
-        student.status = 'Seeking';
-        student.highestStage = 'No Interviews Yet';
-      }
-
-      // Determine early-intervention flags for active (unplaced) candidates (PDF Goal 3)
-      const flags = [];
-
-      if (!student.acceptance) {
-        // Flag 1: 3 or more recruiter screens / early rounds without reaching final round or offer
-        const earlyRounds = student.screensCount + student.firstRoundsCount;
-        if (student.offersCount === 0 && student.finalRoundsCount === 0 && earlyRounds >= 3) {
-          flags.push({
-            type: 'stalled_early',
-            severity: 'high',
-            label: 'Stalled in Early Rounds',
-            reason: `${earlyRounds} early interviews without advancing to final round. Recommended: behavioral & pitch coaching.`
-          });
-        }
-
-        // Flag 2: Student explicitly requested to meet with career services on active offers
-        if (student.meetingRequested) {
-          flags.push({
-            type: 'meeting_requested',
-            severity: 'medium',
-            label: 'Coaching Requested',
-            reason: 'Student checked "Yes" to meet with Career Services regarding offer evaluation or negotiation.'
-          });
-        }
-
-        // Flag 3: Completed final round interviews but zero offers received
-        if (student.offersCount === 0 && student.finalRoundsCount >= 2) {
-          flags.push({
-            type: 'final_round_plateau',
-            severity: 'high',
-            label: 'Final Round Conversion Gap',
-            reason: `${student.finalRoundsCount} final round interviews without an offer yet. Recommended: technical debrief & closing prep.`
-          });
-        }
-
-        // Flag 4: Zero interviews reported (passive / low activity)
-        if (student.totalInterviews === 0) {
-          flags.push({
-            type: 'inactive',
-            severity: 'low',
-            label: 'Zero Activity Logged',
-            reason: 'No interviews or applications recorded yet. Recommended: check-in on resume and pipeline.'
-          });
-        }
-      }
-
-      // Sort student interviews and offers newest first
-      student.interviews.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
-      student.offers.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
-
-      // Find most recent activity record
-      const allEvents = [...student.interviews, ...student.offers];
-      if (student.acceptance) allEvents.push(student.acceptance);
-      allEvents.sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0));
-      student.latestActivity = allEvents[0] || null;
-      student.lastActivityDate = student.latestActivity ? student.latestActivity.date : null;
-
-      student.supportFlags = flags;
-    });
-
-    // Ensure raw tracker submissions are ordered with newest records first
-    this.rawTracker.sort((a, b) => {
-      const timeA = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
-      const timeB = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
-      return timeB - timeA;
-    });
-  }
-
-  /**
-   * Returns complete processed snapshot, sorted by most recent activity first.
-   */
   getData() {
-    // Sort students with most recently active candidates first
-    const studentList = Array.from(this.students.values()).sort((a, b) => {
-      const timeA = a.lastActivityDate ? a.lastActivityDate.getTime() : 0;
-      const timeB = b.lastActivityDate ? b.lastActivityDate.getTime() : 0;
-      if (timeB !== timeA) return timeB - timeA;
-      return a.name.localeCompare(b.name);
-    });
-
     return {
-      students: studentList,
-      rawTracker: this.rawTracker,
-      totalStudents: studentList.length,
-      placedCount: studentList.filter(s => s.status === 'Placed').length,
-      offersCount: studentList.filter(s => s.status === 'Has Offer' || s.status === 'Placed').length,
-      interviewingCount: studentList.filter(s => s.status === 'Interviewing').length,
-      seekingCount: studentList.filter(s => s.status === 'Seeking').length,
-      flaggedStudents: studentList.filter(s => s.supportFlags.length > 0)
+      students: this.students,
+      totalSubmissions: this.submissions.length,
+      placedCount: this.students.filter(s => s.status === 'Placed').length,
+      offerCount: this.students.filter(s => s.status === 'Has Offer').length,
+      interviewingCount: this.students.filter(s => s.status === 'Interviewing').length,
+      seekingCount: this.students.filter(s => s.status === 'Seeking').length
     };
   }
 }

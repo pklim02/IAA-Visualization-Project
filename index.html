@@ -3,360 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NC State IAA - Career Services Recruitment Analytics</title>
-  <meta name="description" content="Automated recruitment dashboard for NC State Institute for Advanced Analytics Career Services">
+  <title>NC STATE IAA • Employment Tracker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./src/css/styles.css">
 </head>
 <body>
-  <div id="app" class="app-container">
-    <!-- NC State Official Top Brand Masthead (Matches official IAA website) -->
-    <div class="ncstate-top-strip">
-      <div class="ncstate-brick-badge">
-        <span class="brick-row-1">NC STATE</span>
-        <span class="brick-row-2">UNIVERSITY</span>
-      </div>
-      <div class="ncstate-top-utilities">
-        <span class="cohort-tag">Institute for Advanced Analytics • Master of Science in Analytics</span>
-        <div class="live-status-pill">
-          <span class="live-dot"></span>
-          <span>Tracker Live</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Main Navigation Header -->
+  <div id="app" class="app-layout">
+    <!-- Top Minimalist Masthead with Exactly 2 Action Buttons -->
     <header class="app-header">
-      <div class="header-branding">
-        <div class="header-titles">
-          <h1 class="header-title">Institute for Advanced Analytics</h1>
-          <p class="header-subtitle">Career Services Recruitment & Placement Intelligence • Class of 2027</p>
+      <div class="header-brand">
+        <span class="brick-logo">NC STATE</span>
+        <div>
+          <h1 class="header-title">NC STATE IAA &bull; Employment Tracker</h1>
+          <div class="header-sub">Candidate Recruitment Tracker &bull; Class of 2027</div>
         </div>
       </div>
 
       <div class="header-actions">
-        <!-- Action Buttons -->
-        <button id="btn-open-form" class="btn btn-primary" title="Log a single real-time interview, offer, or acceptance event">
-          <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-          </svg>
-          Log Form Entry
+        <button id="btn-toggle-view" class="btn btn-mode" title="Switch between Candidate Overview and Student Self-Reporting">
+          Student Entry Form &rarr;
         </button>
 
-        <button id="btn-upload-csv" class="btn btn-secondary" title="Upload and permanently save a Google Sheets export CSV">
-          <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-          </svg>
+        <button id="btn-upload-csv" class="btn btn-primary" title="Import synthetic or live recruitment CSV">
           Import CSV
         </button>
         <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
 
-        <button id="btn-export-data" class="btn btn-ghost" title="Download the consolidated, cleaned dataset to CSV">
-          <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
-          </svg>
-          Export CSV
-        </button>
-
-        <button id="btn-reset-data" class="btn btn-ghost" title="Reset all changes back to pristine default synthetic dataset" style="color: var(--text-muted);">
-          Reset Demo Data
-        </button>
-
-        <!-- Account Switcher Pill -->
-        <button id="btn-account-pill" class="account-pill" title="Switch between Career Services Admin and Student accounts">
-          <!-- Injected dynamically by accountModal.js -->
+        <button id="btn-clear-data" class="btn btn-secondary" title="Reset submissions back to zero for demo">
+          Reset
         </button>
       </div>
     </header>
 
-    <!-- Navigation Tabs (Dynamically updated for Admin vs Student) -->
-    <nav class="app-nav">
-      <ul class="nav-tabs" id="nav-tabs-list" role="tablist">
-        <!-- Rendered dynamically by main.js based on role -->
-      </ul>
-    </nav>
-
-    <!-- Main Content Container -->
-    <main class="app-main">
-      <div id="view-overview" class="view-panel active"></div>
-      <div id="view-students" class="view-panel"></div>
-      <div id="view-replication" class="view-panel"></div>
-      <div id="view-student-portal" class="view-panel"></div>
+    <!-- Master-Detail Single Screen Container -->
+    <main id="app-body">
+      <!-- Injected by main.js -->
     </main>
-
-    <!-- Student Detail Slide-over Drawer -->
-    <aside id="student-drawer" class="student-drawer" aria-hidden="true">
-      <div class="drawer-overlay" id="drawer-overlay"></div>
-      <div class="drawer-panel" id="drawer-content"></div>
-    </aside>
-
-    <!-- Account Switcher / Login Modal -->
-    <div id="account-modal" class="modal-overlay" aria-hidden="true">
-      <div class="modal-card" style="max-width: 540px;">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <h3 class="modal-title">Switch Account & Role</h3>
-            <p class="modal-subtitle">Experience the platform from Career Services or an individual student's perspective</p>
-          </div>
-          <button id="btn-close-account" class="modal-close-btn">&times;</button>
-        </div>
-        <div style="padding: 1.75rem; display: flex; flex-direction: column; gap: 1.5rem;">
-          <!-- Admin Card -->
-          <div style="background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.25rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Career Services Administrator</h4>
-              <span class="badge badge-placed">Full Access</span>
-            </div>
-            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
-              Class-wide placement analytics, complete 75-candidate directory, coaching triage radar, and data dictionary.
-            </p>
-            <button id="btn-login-admin" class="btn btn-primary" style="width: 100%; justify-content: center;">
-              Log In as Career Services Admin
-            </button>
-          </div>
-
-          <!-- Student Card -->
-          <div style="background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.25rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Student Account (Class of 2027)</h4>
-              <span class="badge badge-interviewing">75 Pre-Configured</span>
-            </div>
-            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-              Personalized recruitment portal, personal stage funnel, interview history, and one-click activity reporting.
-            </p>
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <label for="account-student-select">Select Student Account:</label>
-              <select id="account-student-select"></select>
-            </div>
-            <button id="btn-login-student" class="btn btn-secondary" style="width: 100%; justify-content: center;">
-              Log In as Selected Student
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Formula & Metric Replication Inspector Modal -->
-    <div id="inspector-modal" class="modal-overlay" aria-hidden="true">
-      <div class="modal-card">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <h3 class="modal-title" id="inspector-metric-title">Metric Replication Inspector</h3>
-            <p class="modal-subtitle">Exact data source, CSV column, and calculation logic</p>
-          </div>
-          <button id="btn-close-inspector" class="modal-close-btn">&times;</button>
-        </div>
-        <div class="modal-body" id="inspector-metric-body" style="padding: 1.5rem;"></div>
-      </div>
-    </div>
-
-    <!-- Google Form Submission Modal -->
-    <div id="form-modal" class="modal-overlay" aria-hidden="true">
-      <div class="modal-card">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <h3 class="modal-title">Log Recruitment Activity</h3>
-            <p class="modal-subtitle">Simulates incoming Google Form response with instant reactive metric recalculation and storage persistence</p>
-          </div>
-          <button id="btn-close-form" class="modal-close-btn">&times;</button>
-        </div>
-        <form id="submission-form" class="modal-form">
-          <div class="form-row">
-            <div class="form-group">
-              <label for="form-student-select">Student Name *</label>
-              <select id="form-student-select" required></select>
-            </div>
-            <div class="form-group">
-              <label for="form-report-type">What are you reporting today? (Col 4) *</label>
-              <select id="form-report-type" required>
-                <option value="Interview">Interview</option>
-                <option value="Offer">Job Offer</option>
-                <option value="Acceptance">Job Acceptance</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Dynamic conditional fields matching Form branching -->
-          <div id="form-interview-fields">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="form-company-interview">Company, Position, Department (Col 5) *</label>
-                <input type="text" id="form-company-interview" placeholder="e.g. Lumarion Health, Marketing Analytics Analyst, Risk Management">
-              </div>
-              <div class="form-group">
-                <label for="form-interview-stage">Which interview was this? (Col 6) *</label>
-                <select id="form-interview-stage">
-                  <option value="Recruiter Screening">Recruiter Screening</option>
-                  <option value="First Round">First Round</option>
-                  <option value="Second Round">Second Round</option>
-                  <option value="Final Round">Final Round</option>
-                  <option value="Take-home Assignment">Take-home Assignment</option>
-                  <option value="Technical Assessment">Technical Assessment</option>
-                  <option value="Superday">Superday</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="form-source">How did you hear about the job? (Col 7)</label>
-                <select id="form-source">
-                  <option value="Institute">Institute (IAA Career Services)</option>
-                  <option value="Alumni">Alumni</option>
-                  <option value="LinkedIn">LinkedIn</option>
-                  <option value="Recruiter reached out">Recruiter reached out</option>
-                  <option value="Career fair">Career fair</option>
-                  <option value="Referral from a friend">Referral from a friend</option>
-                  <option value="Company website">Company website</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="form-notes">Technical concepts or challenging notes (Col 8)</label>
-                <input type="text" id="form-notes" placeholder="e.g. SQL window functions, statistical case study">
-              </div>
-            </div>
-          </div>
-
-          <div id="form-offer-fields" style="display: none;">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="form-company-offer">Company and Job Title (Col 9) *</label>
-                <input type="text" id="form-company-offer" placeholder="e.g. Evernight Financial, Data Scientist">
-              </div>
-              <div class="form-group">
-                <label for="form-meet-services">Meet with Career Services to discuss? (Col 10) *</label>
-                <select id="form-meet-services">
-                  <option value="No">No</option>
-                  <option value="Yes">Yes, please schedule a session</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div id="form-acceptance-fields" style="display: none;">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="form-company-acceptance">Company Name and Job Title (Col 11) *</label>
-                <input type="text" id="form-company-acceptance" placeholder="e.g. Duskfield Capital, Business Intelligence Analyst">
-              </div>
-              <div class="form-group">
-                <label for="form-compensation">Final Offer Breakdown (Col 12) *</label>
-                <input type="text" id="form-compensation" placeholder="e.g. $115,000 base salary, $8,000 signing bonus">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="form-location">Job Location (City/State) (Col 13)</label>
-                <input type="text" id="form-location" placeholder="e.g. Raleigh, NC">
-              </div>
-              <div class="form-group">
-                <label for="form-work-conditions">Working Conditions (Col 14)</label>
-                <select id="form-work-conditions">
-                  <option value="Hybrid">Hybrid</option>
-                  <option value="Fully on-site">Fully on-site</option>
-                  <option value="Remote">Remote</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div class="modal-footer">
-            <button type="button" id="btn-cancel-form" class="btn btn-secondary">Cancel</button>
-            <button type="submit" class="btn btn-primary">Submit to Live Stream</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Career Services Staff Edit Record Modal -->
-    <div id="edit-submission-modal" class="modal-overlay" aria-hidden="true">
-      <div class="modal-card">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <h3 class="modal-title">Edit Submission Record</h3>
-            <p class="modal-subtitle">Correct employer name typos, adjust interview stages, or update compensation (Staff Admin Only)</p>
-          </div>
-          <button id="btn-close-edit-modal" class="modal-close-btn">&times;</button>
-        </div>
-        <form id="edit-submission-form" class="modal-form">
-          <input type="hidden" id="edit-submission-id">
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="edit-student-display">Student Candidate (Col 2-3)</label>
-              <input type="text" id="edit-student-display" readonly style="background: var(--bg-secondary); cursor: not-allowed;">
-            </div>
-            <div class="form-group">
-              <label for="edit-report-type">Report Type (Col 4)</label>
-              <select id="edit-report-type" required>
-                <option value="Interview">Interview</option>
-                <option value="Offer">Job Offer</option>
-                <option value="Acceptance">Job Acceptance</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="edit-company-role">Company, Position, Department (Cols 5 / 9 / 11) *</label>
-            <input type="text" id="edit-company-role" required placeholder="e.g. SAS Institute, Senior Data Analyst, Marketing Analytics">
-            <small style="color: var(--text-muted); font-size: 0.75rem;">Tip: Fix company spelling here to normalize employer leaderboards across the cohort.</small>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="edit-interview-stage">Interview Stage (Col 6)</label>
-              <select id="edit-interview-stage">
-                <option value="">N/A (Not an interview)</option>
-                <option value="Recruiter Screening">Recruiter Screening</option>
-                <option value="First Round">First Round</option>
-                <option value="Second Round">Second Round</option>
-                <option value="Final Round">Final Round</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="edit-source">How did you hear about the job? (Col 7)</label>
-              <input type="text" id="edit-source" placeholder="e.g. Institute, Alumni Network, LinkedIn">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="edit-compensation">Final Offer Breakdown (Salary & Bonuses) (Col 12)</label>
-            <input type="text" id="edit-compensation" placeholder="e.g. $115,000 base salary, $5,000 signing bonus">
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="edit-location">Job Location (City/State) (Col 13)</label>
-              <input type="text" id="edit-location" placeholder="e.g. Raleigh, NC">
-            </div>
-            <div class="form-group">
-              <label for="edit-work-conditions">Working Conditions (Col 14)</label>
-              <select id="edit-work-conditions">
-                <option value="">Unspecified</option>
-                <option value="Hybrid">Hybrid</option>
-                <option value="Fully on-site">Fully on-site</option>
-                <option value="Remote">Remote</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="edit-notes">Technical Concepts or Feedback (Col 8)</label>
-            <textarea id="edit-notes" rows="2" style="background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 0.65rem; color: var(--text-primary); font-family: var(--font-sans); font-size: 0.85rem; width: 100%; resize: vertical;" placeholder="Notes or feedback questions..."></textarea>
-          </div>
-
-          <div class="modal-footer">
-            <button type="button" id="btn-cancel-edit-modal" class="btn btn-secondary">Cancel</button>
-            <button type="submit" class="btn btn-primary">Save & Sync Dataset</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Notification Toast Container -->
-    <div id="toast-container" class="toast-container" aria-live="polite"></div>
   </div>
 
   <script type="module" src="./src/js/main.js"></script>
