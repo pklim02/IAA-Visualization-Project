@@ -42,7 +42,34 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_submissions_email ON submissions(email);
+
+  CREATE TABLE IF NOT EXISTS warning_acknowledgments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    unity_id TEXT NOT NULL,
+    warning_type TEXT NOT NULL,
+    event_timestamp TEXT,
+    acknowledged_at TEXT NOT NULL,
+    admin_note TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_ack_unity ON warning_acknowledgments(unity_id);
 `);
+
+// Ensure warning_acknowledgments schema is up-to-date
+const ackCols = db.prepare('PRAGMA table_info(warning_acknowledgments)').all().map(c => c.name);
+if (!ackCols.includes('event_timestamp') || !ackCols.includes('admin_note')) {
+  db.exec(`
+    DROP TABLE IF EXISTS warning_acknowledgments;
+    CREATE TABLE warning_acknowledgments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      unity_id TEXT NOT NULL,
+      warning_type TEXT NOT NULL,
+      event_timestamp TEXT,
+      acknowledged_at TEXT NOT NULL,
+      admin_note TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ack_unity ON warning_acknowledgments(unity_id);
+  `);
+}
 
 // 2. Seed student roster if empty
 const countStudents = db.prepare('SELECT COUNT(*) as count FROM students').get().count;
@@ -123,6 +150,25 @@ const INSERT_SUBMISSION = db.prepare(`
      @company_job_title_accept, @final_offer_compensation, @job_location, @working_conditions)
 `);
 
+const UPDATE_SUBMISSION = db.prepare(`
+  UPDATE submissions SET
+    timestamp = @timestamp,
+    email = @email,
+    name = @name,
+    report_type = @report_type,
+    company_position_dept = @company_position_dept,
+    interview_stage = @interview_stage,
+    job_source = @job_source,
+    technical_notes = @technical_notes,
+    company_job_title_offer = @company_job_title_offer,
+    wants_meeting = @wants_meeting,
+    company_job_title_accept = @company_job_title_accept,
+    final_offer_compensation = @final_offer_compensation,
+    job_location = @job_location,
+    working_conditions = @working_conditions
+  WHERE id = @id
+`);
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
@@ -146,6 +192,22 @@ app.post('/api/submissions', (req, res) => {
   res.status(201).json({ ok: true, _id: record._id });
 });
 
+/** 3b. Update an existing submission */
+app.put('/api/submissions/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const record = rowToRecord(req.body, 0);
+  record.id = id;
+  UPDATE_SUBMISSION.run(record);
+  res.json({ ok: true, id });
+});
+
+/** 3c. Delete a submission */
+app.delete('/api/submissions/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  db.prepare('DELETE FROM submissions WHERE id = ?').run(id);
+  res.json({ ok: true, id });
+});
+
 /** 4. Bulk import submissions from CSV */
 app.post('/api/submissions/import', (req, res) => {
   if (!Array.isArray(req.body)) return res.status(400).json({ error: 'Expected array' });
@@ -159,9 +221,65 @@ app.post('/api/submissions/import', (req, res) => {
   res.json({ ok: true, count: req.body.length });
 });
 
-/** 4. Clear all submissions (Reset to 0) */
+/** 4b. Clear all submissions (Reset to 0) */
 app.post('/api/submissions/clear', (_req, res) => {
   db.prepare('DELETE FROM submissions').run();
+  db.prepare('DELETE FROM warning_acknowledgments').run();
+  res.json({ ok: true });
+});
+
+/** 5. Get all warning acknowledgments / notes */
+app.get('/api/acknowledgments', (_req, res) => {
+  const acks = db.prepare(`
+    SELECT id, unity_id as unityID, warning_type as warningType, 
+           event_timestamp as eventTimestamp, acknowledged_at as acknowledgedAt, 
+           admin_note as adminNote 
+    FROM warning_acknowledgments 
+    ORDER BY id DESC
+  `).all();
+  res.json(acks);
+});
+
+/** 6. Acknowledge / Handle a warning */
+app.post('/api/acknowledgments', (req, res) => {
+  const { unityID, warningType, eventTimestamp, adminNote } = req.body;
+  if (!unityID || !warningType) {
+    return res.status(400).json({ error: 'unityID and warningType required' });
+  }
+  const now = new Date().toISOString();
+  const info = db.prepare(`
+    INSERT INTO warning_acknowledgments (unity_id, warning_type, event_timestamp, acknowledged_at, admin_note)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(unityID.toLowerCase().trim(), warningType.trim(), eventTimestamp || '', now, adminNote || '');
+  res.status(201).json({ ok: true, id: info.lastInsertRowid, unityID, warningType, eventTimestamp, acknowledgedAt: now, adminNote });
+});
+
+/** 7. Update an acknowledgment note */
+app.put('/api/acknowledgments/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { adminNote } = req.body;
+  db.prepare('UPDATE warning_acknowledgments SET admin_note = ? WHERE id = ?').run(adminNote || '', id);
+  res.json({ ok: true, id, adminNote });
+});
+
+/** 8. Delete / Unacknowledge a warning */
+app.delete('/api/acknowledgments/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  db.prepare('DELETE FROM warning_acknowledgments WHERE id = ?').run(id);
+  res.json({ ok: true, id });
+});
+
+/** 8b. Quick delete / Undo by unityID and warningType */
+app.delete('/api/acknowledgments', (req, res) => {
+  const { unityID, warningType, id } = req.body || {};
+  if (id) {
+    db.prepare('DELETE FROM warning_acknowledgments WHERE id = ?').run(id);
+  } else if (unityID && warningType) {
+    db.prepare(`
+      DELETE FROM warning_acknowledgments 
+      WHERE id = (SELECT id FROM warning_acknowledgments WHERE unity_id = ? AND warning_type = ? ORDER BY id DESC LIMIT 1)
+    `).run(unityID.toLowerCase().trim(), warningType.trim());
+  }
   res.json({ ok: true });
 });
 

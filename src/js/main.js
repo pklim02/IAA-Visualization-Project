@@ -340,8 +340,56 @@ function renderOverview(container, data) {
                   <div class="alert-item alert-${f.level}">
                     <div class="alert-item-header">
                       <span class="attention-badge ${getAttentionBadgeClass(f.level)}">${escapeHtml(f.label)}</span>
+                      <button class="btn-checkoff" data-student-id="${escapeHtml(selectedStudent.unityID)}" data-warning-type="${escapeHtml(f.type)}" data-event-ts="${escapeHtml(f.occurredAt || '')}" title="Mark as handled by Career Services">
+                        ✓ Mark as Handled
+                      </button>
                     </div>
                     <p class="alert-guidance">${escapeHtml(getAttentionGuidance(f))}</p>
+                    ${f.occurredAt ? `<div style="font-size: 0.725rem; color: #64748B; margin-top: 0.25rem;">Triggered by event: <strong>${escapeHtml(f.occurredAt)}</strong></div>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : (selectedStudent && selectedStudent.handledFlags && selectedStudent.handledFlags.length > 0 ? `
+            <div class="card handled-all-card">
+              <div class="handled-all-header">
+                <span class="handled-all-icon">✓</span>
+                <strong>All Warnings Handled</strong>
+                <span class="handled-all-sub">Career Services reviewed all alerts for this candidate.</span>
+              </div>
+            </div>
+          ` : '')}
+
+          <!-- Career Services Intervention & Coaching Log -->
+          ${selectedStudent && selectedStudent.handledFlags && selectedStudent.handledFlags.length > 0 ? `
+            <div class="card intervention-log-card">
+              <div class="intervention-log-header">
+                <span class="intervention-log-title">Career Services Intervention &amp; Coaching Log</span>
+                <span class="intervention-log-count">${selectedStudent.handledFlags.length} record${selectedStudent.handledFlags.length > 1 ? 's' : ''}</span>
+              </div>
+              <div class="intervention-log-list">
+                ${selectedStudent.handledFlags.map(hf => `
+                  <div class="intervention-item" data-id="${hf.id}">
+                    <div class="intervention-item-top">
+                      <span class="attention-badge ${getAttentionBadgeClass('info')}">${escapeHtml(hf.label)}</span>
+                      <div class="intervention-timestamps">
+                        ${hf.eventTimestamp ? `<span class="ts-event" title="Event Trigger Date">Triggered: ${escapeHtml(hf.eventTimestamp)}</span>` : ''}
+                        <span class="ts-handled" title="Advisor Handled Date">Handled: ${escapeHtml(new Date(hf.acknowledgedAt).toLocaleString())}</span>
+                      </div>
+                      <button class="btn-undo-ack" data-id="${hf.id}" title="Remove entry / restore warning">Undo</button>
+                    </div>
+                    <div class="intervention-note-row">
+                      <div class="intervention-note-content" id="note-view-${hf.id}">
+                        <span class="note-label">Coaching Note:</span>
+                        <span class="note-text ${hf.adminNote ? '' : 'note-empty'}">${hf.adminNote ? escapeHtml(hf.adminNote) : 'No notes recorded. Click Edit to add coaching notes.'}</span>
+                        <button class="btn-edit-note" data-id="${hf.id}">Edit Note</button>
+                      </div>
+                      <div class="intervention-note-editor hidden" id="note-edit-${hf.id}">
+                        <input type="text" class="form-input note-input" value="${escapeHtml(hf.adminNote || '')}" placeholder="Add coaching notes, student feedback, or next steps..." />
+                        <button class="btn-save-note" data-id="${hf.id}">Save</button>
+                        <button class="btn-cancel-note" data-id="${hf.id}">Cancel</button>
+                      </div>
+                    </div>
                   </div>
                 `).join('')}
               </div>
@@ -408,6 +456,86 @@ function renderOverview(container, data) {
     row.addEventListener('click', () => {
       selectedUnityID = row.getAttribute('data-id');
       renderApp();
+    });
+  });
+
+  // Warning Check-Off click handler (Approach A: One-Click Check-Off)
+  container.querySelectorAll('.btn-checkoff').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const studentId = btn.getAttribute('data-student-id');
+      const warningType = btn.getAttribute('data-warning-type');
+      const eventTs = btn.getAttribute('data-event-ts') || '';
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        await dataService.acknowledgeWarning(studentId, warningType, eventTs, '');
+      } catch (err) {
+        console.error('Failed to acknowledge warning:', err);
+        btn.disabled = false;
+        btn.textContent = '✓ Mark as Handled';
+      }
+    });
+  });
+
+  // Intervention Note: Toggle Edit Mode
+  container.querySelectorAll('.btn-edit-note').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      const viewEl = container.querySelector(`#note-view-${id}`);
+      const editEl = container.querySelector(`#note-edit-${id}`);
+      viewEl?.classList.add('hidden');
+      editEl?.classList.remove('hidden');
+    });
+  });
+
+  // Intervention Note: Cancel Edit
+  container.querySelectorAll('.btn-cancel-note').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      const viewEl = container.querySelector(`#note-view-${id}`);
+      const editEl = container.querySelector(`#note-edit-${id}`);
+      viewEl?.classList.remove('hidden');
+      editEl?.classList.add('hidden');
+    });
+  });
+
+  // Intervention Note: Save Note
+  container.querySelectorAll('.btn-save-note').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      const editEl = container.querySelector(`#note-edit-${id}`);
+      const inputEl = editEl?.querySelector('.note-input');
+      const newNote = inputEl?.value || '';
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        await dataService.updateAcknowledgmentNote(id, newNote);
+      } catch (err) {
+        console.error('Failed to save coaching note:', err);
+        btn.disabled = false;
+        btn.textContent = 'Save';
+      }
+    });
+  });
+
+  // Undo / Delete specific acknowledgment by id
+  container.querySelectorAll('.btn-undo-ack').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        await dataService.deleteAcknowledgment(id);
+      } catch (err) {
+        console.error('Failed to delete acknowledgment:', err);
+        btn.disabled = false;
+        btn.textContent = 'Undo';
+      }
     });
   });
 }
@@ -946,6 +1074,549 @@ function renderStudentEntry(container, students) {
 }
 
 /** ----------------------------------------------------
+ *  MODE 4: DATABASE RECORDS (CRUD FOR SUBMISSIONS & NOTES)
+ *  ---------------------------------------------------- */
+let dbCurrentTab = 'submissions'; // 'submissions' | 'notes'
+let dbSearchTerm = '';
+let dbTypeFilter = 'all';
+let dbNotesSearch = '';
+
+function renderDatabaseRecords(container, data) {
+  const submissions = data.submissions || [];
+  const acknowledgments = data.acknowledgments || [];
+  const students = data.students || [];
+
+  // Filter submissions
+  const filteredSubmissions = submissions.filter(r => {
+    if (dbTypeFilter !== 'all') {
+      const type = (r['What are you reporting today?'] || '').trim();
+      if (type.toLowerCase() !== dbTypeFilter.toLowerCase()) return false;
+    }
+    if (dbSearchTerm) {
+      const q = dbSearchTerm.toLowerCase();
+      const name = (r['Last, First Name'] || '').toLowerCase();
+      const email = (r['Email Address'] || '').toLowerCase();
+      const comp1 = (r['Please list the company, position, department/division. '] || r['Please list the company, position, department/division.'] || '').toLowerCase();
+      const comp2 = (r['Please list the company and job title'] || '').toLowerCase();
+      const comp3 = (r['Please list the company name and job title. '] || r['Please list the company name and job title.'] || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || comp1.includes(q) || comp2.includes(q) || comp3.includes(q);
+    }
+    return true;
+  });
+
+  // Filter coaching notes
+  const filteredNotes = acknowledgments.filter(a => {
+    if (dbNotesSearch) {
+      const q = dbNotesSearch.toLowerCase();
+      const unity = (a.unityID || '').toLowerCase();
+      const type = (a.warningType || '').toLowerCase();
+      const note = (a.adminNote || '').toLowerCase();
+      return unity.includes(q) || type.includes(q) || note.includes(q);
+    }
+    return true;
+  });
+
+  container.innerHTML = `
+    <div class="db-records-page">
+      <div class="db-header-row">
+        <div class="db-title-block">
+          <h2>SQLite Database Explorer &amp; Case Records</h2>
+          <div class="db-title-sub">Direct access to live persistent database records and intervention logs</div>
+        </div>
+
+        <div class="db-subnav-strip">
+          <button id="btn-tab-submissions" class="db-subnav-btn ${dbCurrentTab === 'submissions' ? 'active' : ''}">
+            User Submissions (${submissions.length})
+          </button>
+          <button id="btn-tab-notes" class="db-subnav-btn ${dbCurrentTab === 'notes' ? 'active' : ''}">
+            Intervention Notes (${acknowledgments.length})
+          </button>
+        </div>
+      </div>
+
+      ${dbCurrentTab === 'submissions' ? `
+        <!-- Submissions Table View -->
+        <div class="db-toolbar">
+          <div class="db-search-group">
+            <input 
+              type="text" 
+              id="db-search-input" 
+              class="search-input" 
+              placeholder="Search candidate name, email, company..." 
+              value="${escapeHtml(dbSearchTerm)}"
+            />
+            <select id="db-type-select" class="form-input form-select" style="max-width: 160px;">
+              <option value="all" ${dbTypeFilter === 'all' ? 'selected' : ''}>All Types</option>
+              <option value="Interview" ${dbTypeFilter === 'Interview' ? 'selected' : ''}>Interview</option>
+              <option value="Offer" ${dbTypeFilter === 'Offer' ? 'selected' : ''}>Offer</option>
+              <option value="Acceptance" ${dbTypeFilter === 'Acceptance' ? 'selected' : ''}>Acceptance</option>
+            </select>
+          </div>
+          <button id="btn-add-submission-modal" class="btn btn-primary">
+            + Add New Submission
+          </button>
+        </div>
+
+        <div class="db-table-container">
+          <table class="db-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">ID</th>
+                <th>Timestamp</th>
+                <th>Candidate</th>
+                <th>Type</th>
+                <th>Company &amp; Role</th>
+                <th>Stage / Details</th>
+                <th>Wants Meeting</th>
+                <th style="text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredSubmissions.length === 0 ? `
+                <tr><td colspan="8" style="text-align: center; padding: 2rem; color: #94A3B8;">No submission rows match your filters.</td></tr>
+              ` : filteredSubmissions.map(r => {
+                const type = (r['What are you reporting today?'] || 'Interview').trim();
+                let compRole = '';
+                let details = '';
+                if (type === 'Acceptance') {
+                  compRole = r['Please list the company name and job title. '] || r['Please list the company name and job title.'] || 'N/A';
+                  details = r['What is the final offer? Please break down by salary and bonuses.'] || '';
+                } else if (type === 'Offer') {
+                  compRole = r['Please list the company and job title'] || 'N/A';
+                  details = 'Offer Received';
+                } else {
+                  compRole = r['Please list the company, position, department/division. '] || r['Please list the company, position, department/division.'] || 'N/A';
+                  details = r['Which interview was this? '] || r['Which interview was this?'] || '';
+                }
+                const wants = r['Do you want to meet with career services to discuss further?:'] || r['Do you want to meet with career services to discuss further?'] || 'No';
+
+                return `
+                  <tr>
+                    <td><strong>#${r._dbId || ''}</strong></td>
+                    <td style="white-space: nowrap; color: #64748B;">${escapeHtml(r['Timestamp'] || '')}</td>
+                    <td>
+                      <strong>${escapeHtml(r['Last, First Name'] || '')}</strong>
+                      <div style="font-size: 0.75rem; color: #64748B;">${escapeHtml(r['Email Address'] || '')}</div>
+                    </td>
+                    <td><span class="stream-tag tag-${type.toLowerCase()}">${escapeHtml(type)}</span></td>
+                    <td>${escapeHtml(compRole)}</td>
+                    <td>${escapeHtml(details)}</td>
+                    <td>
+                      ${wants.toLowerCase().startsWith('yes') ? `
+                        <span class="attention-badge badge-attention-urgent">Yes</span>
+                      ` : '<span style="color: #94A3B8;">No</span>'}
+                    </td>
+                    <td class="db-actions-cell" style="justify-content: flex-end;">
+                      <button class="btn-action-edit btn-edit-sub" data-db-id="${r._dbId}">Edit</button>
+                      <button class="btn-action-delete btn-delete-sub" data-db-id="${r._dbId}" data-name="${escapeHtml(r['Last, First Name'] || '')}">Delete</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `
+        <!-- Coaching Notes Table View -->
+        <div class="db-toolbar">
+          <div class="db-search-group">
+            <input 
+              type="text" 
+              id="db-notes-search-input" 
+              class="search-input" 
+              placeholder="Search UnityID, alert type, or note..." 
+              value="${escapeHtml(dbNotesSearch)}"
+            />
+          </div>
+          <button id="btn-add-note-modal" class="btn btn-primary">
+            + Log Coaching Note
+          </button>
+        </div>
+
+        <div class="db-table-container">
+          <table class="db-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">ID</th>
+                <th>Candidate</th>
+                <th>Alert Type</th>
+                <th>Trigger Event</th>
+                <th>Handled Date</th>
+                <th>Coaching / Intervention Note</th>
+                <th style="text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredNotes.length === 0 ? `
+                <tr><td colspan="7" style="text-align: center; padding: 2rem; color: #94A3B8;">No intervention notes logged yet.</td></tr>
+              ` : filteredNotes.map(a => {
+                const stu = students.find(s => s.unityID.toLowerCase() === (a.unityID || '').toLowerCase());
+                const studentName = stu ? stu.name : a.unityID;
+
+                return `
+                  <tr>
+                    <td><strong>#${a.id}</strong></td>
+                    <td>
+                      <strong>${escapeHtml(studentName)}</strong>
+                      <div style="font-size: 0.75rem; color: #64748B;">${escapeHtml(a.unityID)}</div>
+                    </td>
+                    <td><span class="attention-badge badge-attention-info">${escapeHtml(a.warningType)}</span></td>
+                    <td style="color: #B45309;">${escapeHtml(a.eventTimestamp || 'N/A')}</td>
+                    <td style="color: #15803D;">${escapeHtml(a.acknowledgedAt ? new Date(a.acknowledgedAt).toLocaleString() : '')}</td>
+                    <td>
+                      <div style="max-width: 380px;">${escapeHtml(a.adminNote || 'No notes.')}</div>
+                    </td>
+                    <td class="db-actions-cell" style="justify-content: flex-end;">
+                      <button class="btn-action-edit btn-edit-note-modal" data-id="${a.id}" data-note="${escapeHtml(a.adminNote || '')}">Edit Note</button>
+                      <button class="btn-action-delete btn-delete-ack" data-id="${a.id}">Delete</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+
+    <!-- Modal Container -->
+    <div id="db-modal-root"></div>
+  `;
+
+  // Tab switcher
+  container.querySelector('#btn-tab-submissions')?.addEventListener('click', () => {
+    dbCurrentTab = 'submissions';
+    renderDatabaseRecords(container, data);
+  });
+  container.querySelector('#btn-tab-notes')?.addEventListener('click', () => {
+    dbCurrentTab = 'notes';
+    renderDatabaseRecords(container, data);
+  });
+
+  // Search and filter listeners for Submissions
+  const subSearchInput = container.querySelector('#db-search-input');
+  subSearchInput?.addEventListener('input', (e) => {
+    dbSearchTerm = e.target.value;
+    renderDatabaseRecords(container, data);
+    const el = document.getElementById('db-search-input');
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  });
+
+  const subTypeSelect = container.querySelector('#db-type-select');
+  subTypeSelect?.addEventListener('change', (e) => {
+    dbTypeFilter = e.target.value;
+    renderDatabaseRecords(container, data);
+  });
+
+  // Search listener for Notes
+  const notesSearchInput = container.querySelector('#db-notes-search-input');
+  notesSearchInput?.addEventListener('input', (e) => {
+    dbNotesSearch = e.target.value;
+    renderDatabaseRecords(container, data);
+    const el = document.getElementById('db-notes-search-input');
+    if (el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  });
+
+  // Delete submission
+  container.querySelectorAll('.btn-delete-sub').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const dbId = btn.getAttribute('data-db-id');
+      const name = btn.getAttribute('data-name');
+      if (confirm(`Delete submission #${dbId} for ${name}? This cannot be undone.`)) {
+        try {
+          await dataService.deleteSubmission(dbId);
+        } catch (err) {
+          alert(`Failed to delete: ${err.message}`);
+        }
+      }
+    });
+  });
+
+  // Delete note
+  container.querySelectorAll('.btn-delete-ack').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      if (confirm(`Delete coaching note #${id}?`)) {
+        try {
+          await dataService.deleteAcknowledgment(id);
+        } catch (err) {
+          alert(`Failed to delete note: ${err.message}`);
+        }
+      }
+    });
+  });
+
+  // Open Edit Note Modal
+  container.querySelectorAll('.btn-edit-note-modal').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const currentNote = btn.getAttribute('data-note') || '';
+      openEditNoteModal(id, currentNote);
+    });
+  });
+
+  // Open Add Note Modal
+  container.querySelector('#btn-add-note-modal')?.addEventListener('click', () => {
+    openAddNoteModal(students);
+  });
+
+  // Open Add Submission Modal
+  container.querySelector('#btn-add-submission-modal')?.addEventListener('click', () => {
+    openSubmissionModal(null, students);
+  });
+
+  // Open Edit Submission Modal
+  container.querySelectorAll('.btn-edit-sub').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dbId = parseInt(btn.getAttribute('data-db-id'), 10);
+      const row = submissions.find(s => (s._dbId || s.id) === dbId);
+      if (row) {
+        openSubmissionModal(row, students);
+      }
+    });
+  });
+}
+
+function openEditNoteModal(id, currentNote) {
+  const root = document.getElementById('db-modal-root');
+  if (!root) return;
+  root.innerHTML = `
+    <div class="db-modal-overlay">
+      <div class="db-modal-content" style="max-width: 500px;">
+        <div class="db-modal-header">
+          <h3 class="db-modal-title">Edit Coaching Note #${id}</h3>
+          <button class="db-modal-close">&times;</button>
+        </div>
+        <div class="db-modal-body">
+          <div class="form-group">
+            <label class="form-label">Coaching &amp; Intervention Note</label>
+            <textarea id="modal-edit-note-text" class="form-input" rows="4">${escapeHtml(currentNote)}</textarea>
+          </div>
+        </div>
+        <div class="db-modal-footer">
+          <button class="btn btn-secondary db-modal-cancel">Cancel</button>
+          <button id="modal-save-note-btn" class="btn btn-primary">Save Note</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  root.querySelector('.db-modal-close')?.addEventListener('click', () => { root.innerHTML = ''; });
+  root.querySelector('.db-modal-cancel')?.addEventListener('click', () => { root.innerHTML = ''; });
+  root.querySelector('#modal-save-note-btn')?.addEventListener('click', async () => {
+    const text = root.querySelector('#modal-edit-note-text')?.value || '';
+    try {
+      await dataService.updateAcknowledgmentNote(id, text);
+      root.innerHTML = '';
+    } catch (err) {
+      alert(`Error saving note: ${err.message}`);
+    }
+  });
+}
+
+function openAddNoteModal(students) {
+  const root = document.getElementById('db-modal-root');
+  if (!root) return;
+  root.innerHTML = `
+    <div class="db-modal-overlay">
+      <div class="db-modal-content" style="max-width: 540px;">
+        <div class="db-modal-header">
+          <h3 class="db-modal-title">Log New Career Services Coaching Note</h3>
+          <button class="db-modal-close">&times;</button>
+        </div>
+        <div class="db-modal-body">
+          <div class="form-group">
+            <label class="form-label">Select Candidate *</label>
+            <select id="modal-add-note-student" class="form-input form-select">
+              ${students.map(s => `<option value="${escapeHtml(s.unityID)}">${escapeHtml(s.name)} (${escapeHtml(s.unityID)})</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Intervention Category *</label>
+            <select id="modal-add-note-type" class="form-input form-select">
+              <option value="meeting_wanted">Meeting Wanted</option>
+              <option value="closing_support">Closing Support</option>
+              <option value="offer_decision">Decision Needed</option>
+              <option value="multi_offer">Multi-Offer Review</option>
+              <option value="screening_polish">Screening Polish</option>
+              <option value="withdraw_check">Withdrawal Check (Post-Acceptance)</option>
+              <option value="stalled">Stalled Check-in</option>
+              <option value="general_coaching">General Advising &amp; Coaching</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Coaching Notes &amp; Action Items</label>
+            <textarea id="modal-add-note-text" class="form-input" rows="4" placeholder="Detail the student discussion, feedback, or coaching next steps..."></textarea>
+          </div>
+        </div>
+        <div class="db-modal-footer">
+          <button class="btn btn-secondary db-modal-cancel">Cancel</button>
+          <button id="modal-create-note-btn" class="btn btn-primary">Log Note</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  root.querySelector('.db-modal-close')?.addEventListener('click', () => { root.innerHTML = ''; });
+  root.querySelector('.db-modal-cancel')?.addEventListener('click', () => { root.innerHTML = ''; });
+  root.querySelector('#modal-create-note-btn')?.addEventListener('click', async () => {
+    const unityID = root.querySelector('#modal-add-note-student')?.value;
+    const warningType = root.querySelector('#modal-add-note-type')?.value;
+    const text = root.querySelector('#modal-add-note-text')?.value || '';
+    if (!unityID) return alert('Candidate required');
+    try {
+      await dataService.acknowledgeWarning(unityID, warningType, '', text);
+      root.innerHTML = '';
+    } catch (err) {
+      alert(`Error creating note: ${err.message}`);
+    }
+  });
+}
+
+function openSubmissionModal(existingRow, students) {
+  const root = document.getElementById('db-modal-root');
+  if (!root) return;
+  const isEdit = !!existingRow;
+  const repType = isEdit ? (existingRow['What are you reporting today?'] || 'Interview') : 'Interview';
+  const email = isEdit ? (existingRow['Email Address'] || '') : (students[0]?.email || '');
+  const timestamp = isEdit ? (existingRow['Timestamp'] || '') : new Date().toLocaleString();
+
+  let comp = '';
+  let stage = '';
+  let notes = '';
+  let wants = isEdit ? (existingRow['Do you want to meet with career services to discuss further?:'] || existingRow['Do you want to meet with career services to discuss further?'] || 'No') : 'No';
+
+  if (isEdit) {
+    if (repType === 'Acceptance') {
+      comp = existingRow['Please list the company name and job title. '] || existingRow['Please list the company name and job title.'] || '';
+      stage = existingRow['What is the final offer? Please break down by salary and bonuses.'] || '';
+    } else if (repType === 'Offer') {
+      comp = existingRow['Please list the company and job title'] || '';
+      stage = 'Offer Received';
+    } else {
+      comp = existingRow['Please list the company, position, department/division. '] || existingRow['Please list the company, position, department/division.'] || '';
+      stage = existingRow['Which interview was this? '] || existingRow['Which interview was this?'] || 'First Round';
+      notes = existingRow['Were there any technical concepts or questions that were challenging or new to you? '] || existingRow['Were there any technical concepts or questions that were challenging or new to you?'] || '';
+    }
+  }
+
+  root.innerHTML = `
+    <div class="db-modal-overlay">
+      <div class="db-modal-content">
+        <div class="db-modal-header">
+          <h3 class="db-modal-title">${isEdit ? `Edit Submission #${existingRow._dbId}` : 'Add New Submission Record'}</h3>
+          <button class="db-modal-close">&times;</button>
+        </div>
+        <div class="db-modal-body">
+          <div class="form-group">
+            <label class="form-label">Candidate *</label>
+            <select id="modal-sub-student" class="form-input form-select" ${isEdit ? 'disabled' : ''}>
+              ${students.map(s => `
+                <option value="${escapeHtml(s.unityID)}" data-name="${escapeHtml(s.name)}" data-email="${escapeHtml(s.email)}" ${s.email.toLowerCase() === email.toLowerCase() ? 'selected' : ''}>
+                  ${escapeHtml(s.name)} (${escapeHtml(s.unityID)})
+                </option>
+              `).join('')}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Reporting Type *</label>
+            <select id="modal-sub-type" class="form-input form-select">
+              <option value="Interview" ${repType === 'Interview' ? 'selected' : ''}>Interview</option>
+              <option value="Offer" ${repType === 'Offer' ? 'selected' : ''}>Offer</option>
+              <option value="Acceptance" ${repType === 'Acceptance' ? 'selected' : ''}>Acceptance</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Company &amp; Position *</label>
+            <input type="text" id="modal-sub-comp" class="form-input" value="${escapeHtml(comp)}" placeholder="e.g. Bank of America, Senior Data Scientist" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Stage / Compensation Details</label>
+            <input type="text" id="modal-sub-stage" class="form-input" value="${escapeHtml(stage)}" placeholder="e.g. Final Round or $115,000 + $10,000 bonus" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Technical Concepts / Notes</label>
+            <textarea id="modal-sub-notes" class="form-input" rows="2" placeholder="Interview questions or notes">${escapeHtml(notes)}</textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Meet with Career Services to discuss?</label>
+            <select id="modal-sub-wants" class="form-input form-select">
+              <option value="No" ${wants.toLowerCase().startsWith('no') ? 'selected' : ''}>No</option>
+              <option value="Yes" ${wants.toLowerCase().startsWith('yes') ? 'selected' : ''}>Yes</option>
+            </select>
+          </div>
+        </div>
+        <div class="db-modal-footer">
+          <button class="btn btn-secondary db-modal-cancel">Cancel</button>
+          <button id="modal-save-sub-btn" class="btn btn-primary">${isEdit ? 'Save Changes' : 'Create Record'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  root.querySelector('.db-modal-close')?.addEventListener('click', () => { root.innerHTML = ''; });
+  root.querySelector('.db-modal-cancel')?.addEventListener('click', () => { root.innerHTML = ''; });
+  root.querySelector('#modal-save-sub-btn')?.addEventListener('click', async () => {
+    const studentSelect = root.querySelector('#modal-sub-student');
+    const selectedOpt = studentSelect?.selectedOptions?.[0];
+    const sName = selectedOpt?.getAttribute('data-name') || '';
+    const sEmail = selectedOpt?.getAttribute('data-email') || '';
+
+    const newType = root.querySelector('#modal-sub-type')?.value || 'Interview';
+    const newComp = root.querySelector('#modal-sub-comp')?.value || '';
+    const newStage = root.querySelector('#modal-sub-stage')?.value || '';
+    const newNotes = root.querySelector('#modal-sub-notes')?.value || '';
+    const newWants = root.querySelector('#modal-sub-wants')?.value || 'No';
+
+    const rowPayload = {
+      'Timestamp': timestamp,
+      'Email Address': sEmail,
+      'Last, First Name': sName,
+      'What are you reporting today?': newType,
+      'Do you want to meet with career services to discuss further?:': newWants
+    };
+
+    if (newType === 'Acceptance') {
+      rowPayload['Please list the company name and job title. '] = newComp;
+      rowPayload['What is the final offer? Please break down by salary and bonuses.'] = newStage;
+      rowPayload['Where is the job located (city/state)? '] = 'Raleigh, NC';
+      rowPayload['What are the working conditions? '] = 'Hybrid';
+    } else if (newType === 'Offer') {
+      rowPayload['Please list the company and job title'] = newComp;
+    } else {
+      rowPayload['Please list the company, position, department/division. '] = newComp;
+      rowPayload['Which interview was this? '] = newStage || 'First Round';
+      rowPayload['How did you hear about the job?'] = 'Institute';
+      rowPayload['Were there any technical concepts or questions that were challenging or new to you? '] = newNotes;
+    }
+
+    try {
+      if (isEdit) {
+        await dataService.updateSubmission(existingRow._dbId, rowPayload);
+      } else {
+        await dataService.addSubmission(rowPayload);
+      }
+      root.innerHTML = '';
+    } catch (err) {
+      alert(`Error saving submission: ${err.message}`);
+    }
+  });
+}
+
+/** ----------------------------------------------------
  *  APPLICATION DISPATCHER
  *  ---------------------------------------------------- */
 function renderApp() {
@@ -968,8 +1639,10 @@ function renderApp() {
     renderOverview(container, data);
   } else if (currentMode === 'analytics') {
     renderAnalytics(container, data);
-  } else {
+  } else if (currentMode === 'student-entry') {
     renderStudentEntry(container, data.students);
+  } else if (currentMode === 'database-records') {
+    renderDatabaseRecords(container, data);
   }
 }
 

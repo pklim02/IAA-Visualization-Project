@@ -1,9 +1,23 @@
 import Papa from 'papaparse';
 
+export function getWarningLabel(type) {
+  switch (type) {
+    case 'withdraw_check': return 'Withdrawal Check (Post-Acceptance)';
+    case 'closing_support': return 'Closing Support (>2 Finals)';
+    case 'offer_decision': return 'Decision Needed (>4d)';
+    case 'meeting_wanted': return 'Meeting Wanted';
+    case 'multi_offer': return 'Multi-Offer Review';
+    case 'screening_polish': return 'Screening Polish';
+    case 'stalled': return 'Stalled (30+ Days)';
+    default: return type;
+  }
+}
+
 class DataService {
   constructor() {
     this.students = [];      // Array of student objects
     this.submissions = [];   // Array of raw CSV rows
+    this.acknowledgments = []; // Array of { unityID, warningType, acknowledgedAt }
     this.listeners = [];
     this.isLoaded = false;
   }
@@ -27,13 +41,15 @@ class DataService {
   }
 
   async fetchData() {
-    // 1. Fetch official student roster from SQLite
-    const stuRes = await fetch('/api/students');
+    // 1. Fetch roster, submissions, and warning acknowledgments in parallel
+    const [stuRes, subRes, ackRes] = await Promise.all([
+      fetch('/api/students'),
+      fetch('/api/submissions'),
+      fetch('/api/acknowledgments')
+    ]);
     const stuList = stuRes.ok ? await stuRes.json() : [];
-
-    // 2. Fetch raw submissions from SQLite
-    const subRes = await fetch('/api/submissions');
     this.submissions = subRes.ok ? await subRes.json() : [];
+    this.acknowledgments = ackRes.ok ? await ackRes.json() : [];
 
     // Real-time clock of the current moment accessing the application
     const now = new Date();
@@ -42,6 +58,7 @@ class DataService {
     this.students = stuList.map(stu => {
       const email = (stu.email || '').toLowerCase().trim();
       const studentRows = this.submissions.filter(r => (r['Email Address'] || '').toLowerCase().trim() === email);
+      const studentAcks = this.acknowledgments.filter(a => (a.unityID || '').toLowerCase() === (stu.unityID || '').toLowerCase());
 
       const interviews = studentRows.filter(r => (r['What are you reporting today?'] || '').trim() === 'Interview');
       const offers = studentRows.filter(r => (r['What are you reporting today?'] || '').trim() === 'Offer');
@@ -80,7 +97,9 @@ class DataService {
         const latestRow = sortedRows[0];
         const wantsMeeting = (latestRow['Do you want to meet with career services to discuss further?:'] || latestRow['Do you want to meet with career services to discuss further?'] || '').trim();
         if (wantsMeeting.toLowerCase().startsWith('yes')) {
-          flags.push({ type: 'meeting_wanted', label: 'Meeting Wanted', level: 'urgent' });
+          const occurredAt = latestRow['Timestamp'] || '';
+          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : Date.now();
+          flags.push({ type: 'meeting_wanted', label: 'Meeting Wanted', level: 'urgent', occurredAt, occurredTime });
         }
       }
 
@@ -90,78 +109,143 @@ class DataService {
         const acceptDbId = acceptance._dbId || 0;
 
         // Check if candidate is still actively logging interviews after acceptance
-        const postAcceptInterviews = interviews.some(r => {
+        const postAcceptInterviews = interviews.filter(r => {
           const rDate = r['Timestamp'] ? new Date(r['Timestamp']).getTime() : 0;
           const rDbId = r._dbId || 0;
           const isDateAfter = acceptDate > 0 && rDate > acceptDate;
           const isDbAfter = acceptDbId > 0 && rDbId > acceptDbId;
           return isDateAfter || isDbAfter;
+        }).sort((a, b) => {
+          const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
+          const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
+          if (tb !== ta) return tb - ta;
+          return (b._dbId || 0) - (a._dbId || 0);
         });
-        if (postAcceptInterviews) {
-          flags.push({ type: 'withdraw_check', label: 'Withdrawal Check (Post-Acceptance)', level: 'warning' });
+
+        if (postAcceptInterviews.length > 0) {
+          const latest = postAcceptInterviews[0];
+          const occurredAt = latest['Timestamp'] || '';
+          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : Date.now();
+          flags.push({ type: 'withdraw_check', label: 'Withdrawal Check (Post-Acceptance)', level: 'warning', occurredAt, occurredTime });
         }
       } else {
         // ACTIVE / SEEKING CANDIDATE LOGIC
         // Rule 2: Holding Offer > 4 Days without decision
-        const hasStagnantOffer = offers.some(r => {
+        const stagnantOffers = offers.filter(r => {
           const rDate = r['Timestamp'] ? new Date(r['Timestamp']).getTime() : 0;
           if (!rDate) return false;
           // Days elapsed from offer date to current real-time clock
           const daysHeld = (now.getTime() - rDate) / (1000 * 60 * 60 * 24);
-          // If offer is held > 4 days in real time, flag it
           return daysHeld > 4;
+        }).sort((a, b) => {
+          const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
+          const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
+          return tb - ta;
         });
-        if (hasStagnantOffer) {
-          flags.push({ type: 'offer_decision', label: 'Decision Needed (>4d)', level: 'warning' });
+
+        if (stagnantOffers.length > 0) {
+          const latest = stagnantOffers[0];
+          const occurredAt = latest['Timestamp'] || '';
+          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : 0;
+          flags.push({ type: 'offer_decision', label: 'Decision Needed (>4d)', level: 'warning', occurredAt, occurredTime });
         }
 
         // Rule 3: Multiple Active Offers (holding >= 2 concurrent offers)
         if (offers.length >= 2) {
-          flags.push({ type: 'multi_offer', label: 'Multi-Offer Review', level: 'info' });
+          const sortedOffers = [...offers].sort((a, b) => {
+            const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
+            const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
+            return tb - ta;
+          });
+          const latest = sortedOffers[0];
+          const occurredAt = latest['Timestamp'] || '';
+          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : 0;
+          flags.push({ type: 'multi_offer', label: 'Multi-Offer Review', level: 'info', occurredAt, occurredTime });
         }
 
         // Rule 4: Closing Support (> 2 Final Rounds and 0 Offers)
-        const finalRoundsCount = interviews.filter(r => {
+        const finalRounds = interviews.filter(r => {
           const stage = r['Which interview was this? '] || r['Which interview was this?'] || '';
           return stage.toLowerCase().includes('final');
-        }).length;
-        if (finalRoundsCount > 2 && offers.length === 0) {
-          flags.push({ type: 'closing_support', label: 'Closing Support (>2 Finals)', level: 'urgent' });
+        }).sort((a, b) => {
+          const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
+          const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
+          return tb - ta;
+        });
+
+        if (finalRounds.length > 2 && offers.length === 0) {
+          const latest = finalRounds[0];
+          const occurredAt = latest['Timestamp'] || '';
+          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : 0;
+          flags.push({ type: 'closing_support', label: 'Closing Support (>2 Finals)', level: 'urgent', occurredAt, occurredTime });
         }
 
         // Rule 5: Screening Drop-off (>= 4 screenings and 0 advanced rounds)
-        const screeningCount = interviews.filter(r => {
+        const screenings = interviews.filter(r => {
           const stage = r['Which interview was this? '] || r['Which interview was this?'] || '';
           return stage.toLowerCase().includes('screen');
-        }).length;
+        }).sort((a, b) => {
+          const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
+          const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
+          return tb - ta;
+        });
+
         const advancedCount = interviews.filter(r => {
           const stage = r['Which interview was this? '] || r['Which interview was this?'] || '';
           return /second|final/i.test(stage);
         }).length;
-        if (screeningCount >= 4 && advancedCount === 0) {
-          flags.push({ type: 'screening_polish', label: 'Screening Polish', level: 'warning' });
+
+        if (screenings.length >= 4 && advancedCount === 0) {
+          const latest = screenings[0];
+          const occurredAt = latest['Timestamp'] || '';
+          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : 0;
+          flags.push({ type: 'screening_polish', label: 'Screening Polish', level: 'warning', occurredAt, occurredTime });
         }
 
         // Rule 6: Inactive / Stalled (0 activity in past 30 days)
-        // Cross-references with the real-time clock of the current date:
         if (this.submissions.length > 0) {
           if (studentRows.length === 0) {
-            flags.push({ type: 'stalled', label: 'Stalled (30+ Days)', level: 'muted' });
+            flags.push({ type: 'stalled', label: 'Stalled (30+ Days)', level: 'muted', occurredAt: 'Cohort Inception', occurredTime: 0 });
           } else if (latestStudentTs > 0) {
             const daysSinceActivity = (now.getTime() - latestStudentTs) / (1000 * 60 * 60 * 24);
-            // If the activity occurred today or recently (<= 30 days), daysSinceActivity <= 30.
-            // If the event was submitted today, daysSinceActivity is ~0 days (NOT stalled!).
             if (daysSinceActivity > 30) {
-              flags.push({ type: 'stalled', label: 'Stalled (30+ Days)', level: 'muted' });
+              flags.push({ type: 'stalled', label: 'Stalled (30+ Days)', level: 'muted', occurredAt: new Date(latestStudentTs).toLocaleDateString(), occurredTime: latestStudentTs });
             }
           }
         }
       }
 
-      // Sort flags by urgency priority: urgent > warning > info > muted
+      // Filter flags: An event is considered active if NO acknowledgment exists that covers it.
+      // An acknowledgment covers an event if either:
+      // a) ack.eventTimestamp === flag.occurredAt
+      // b) ack.acknowledgedAt is chronologically AFTER flag.occurredTime
+      const activeFlags = [];
+      for (const flag of flags) {
+        const isCovered = studentAcks.some(a => {
+          if (a.warningType !== flag.type) return false;
+          if (a.eventTimestamp && flag.occurredAt && a.eventTimestamp === flag.occurredAt) return true;
+          const ackTime = a.acknowledgedAt ? new Date(a.acknowledgedAt).getTime() : 0;
+          return ackTime >= flag.occurredTime;
+        });
+        if (!isCovered) {
+          activeFlags.push(flag);
+        }
+      }
+
+      // Handled flags log for this student (all historical interventions, newest first)
+      const handledFlags = studentAcks.map(a => ({
+        id: a.id,
+        type: a.warningType,
+        label: getWarningLabel(a.warningType),
+        eventTimestamp: a.eventTimestamp || '',
+        acknowledgedAt: a.acknowledgedAt || '',
+        adminNote: a.adminNote || ''
+      })).sort((a, b) => b.id - a.id);
+
+      // Sort active flags by urgency priority: urgent > warning > info > muted
       const priorityOrder = { urgent: 1, warning: 2, info: 3, muted: 4 };
-      flags.sort((a, b) => (priorityOrder[a.level] || 99) - (priorityOrder[b.level] || 99));
-      const primaryFlag = flags.length > 0 ? flags[0] : null;
+      activeFlags.sort((a, b) => (priorityOrder[a.level] || 99) - (priorityOrder[b.level] || 99));
+      const primaryFlag = activeFlags.length > 0 ? activeFlags[0] : null;
 
       return {
         unityID: stu.unityID,
@@ -174,7 +258,8 @@ class DataService {
         isPlaced,
         acceptanceRecord: acceptance,
         attentionFlag: primaryFlag,
-        attentionFlags: flags,
+        attentionFlags: activeFlags,
+        handledFlags,
         history: studentRows // Keep full raw chronological rows
       };
     });
@@ -224,12 +309,95 @@ class DataService {
   }
 
   /**
+   * Update an existing submission row in SQLite
+   */
+  async updateSubmission(id, row) {
+    const res = await fetch(`/api/submissions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(row)
+    });
+    if (!res.ok) throw new Error('Failed to update submission in SQLite');
+    await this.fetchData();
+    this.notify();
+    return this.getData();
+  }
+
+  /**
+   * Delete a single submission row from SQLite
+   */
+  async deleteSubmission(id) {
+    const res = await fetch(`/api/submissions/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete submission from SQLite');
+    await this.fetchData();
+    this.notify();
+    return this.getData();
+  }
+
+  /**
    * Clear all submissions from SQLite (reset to 0)
    */
   async clearAll() {
     const res = await fetch('/api/submissions/clear', { method: 'POST' });
     if (!res.ok) throw new Error('Failed to clear submissions in SQLite');
     this.submissions = [];
+    this.acknowledgments = [];
+    await this.fetchData();
+    this.notify();
+    return this.getData();
+  }
+
+  /**
+   * Approach A: Acknowledge / Mark a warning as handled with event timestamp & optional coaching note
+   */
+  async acknowledgeWarning(unityID, warningType, eventTimestamp = '', adminNote = '') {
+    const res = await fetch('/api/acknowledgments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unityID, warningType, eventTimestamp, adminNote })
+    });
+    if (!res.ok) throw new Error('Failed to acknowledge warning');
+    await this.fetchData();
+    this.notify();
+    return this.getData();
+  }
+
+  /**
+   * Update coaching note on an existing acknowledgment
+   */
+  async updateAcknowledgmentNote(id, adminNote) {
+    const res = await fetch(`/api/acknowledgments/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminNote })
+    });
+    if (!res.ok) throw new Error('Failed to update acknowledgment note');
+    await this.fetchData();
+    this.notify();
+    return this.getData();
+  }
+
+  /**
+   * Delete a specific acknowledgment entry by id
+   */
+  async deleteAcknowledgment(id) {
+    const res = await fetch(`/api/acknowledgments/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete acknowledgment');
+    await this.fetchData();
+    this.notify();
+    return this.getData();
+  }
+
+  /**
+   * Quick restore / undo latest warning by unityID & warningType
+   */
+  async unacknowledgeWarning(unityID, warningType) {
+    const res = await fetch('/api/acknowledgments', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unityID, warningType })
+    });
+    if (!res.ok) throw new Error('Failed to restore warning');
     await this.fetchData();
     this.notify();
     return this.getData();
@@ -292,6 +460,8 @@ class DataService {
 
     return {
       students: this.students,
+      submissions: this.submissions,
+      acknowledgments: this.acknowledgments,
       totalSubmissions: this.submissions.length,
       totalStudents,
       placedCount,
