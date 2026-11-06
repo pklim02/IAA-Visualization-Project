@@ -48,6 +48,7 @@ db.exec(`
     unity_id TEXT NOT NULL,
     warning_type TEXT NOT NULL,
     event_timestamp TEXT,
+    record_id INTEGER,
     acknowledged_at TEXT NOT NULL,
     admin_note TEXT
   );
@@ -56,19 +57,10 @@ db.exec(`
 
 // Ensure warning_acknowledgments schema is up-to-date
 const ackCols = db.prepare('PRAGMA table_info(warning_acknowledgments)').all().map(c => c.name);
-if (!ackCols.includes('event_timestamp') || !ackCols.includes('admin_note')) {
-  db.exec(`
-    DROP TABLE IF EXISTS warning_acknowledgments;
-    CREATE TABLE warning_acknowledgments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      unity_id TEXT NOT NULL,
-      warning_type TEXT NOT NULL,
-      event_timestamp TEXT,
-      acknowledged_at TEXT NOT NULL,
-      admin_note TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_ack_unity ON warning_acknowledgments(unity_id);
-  `);
+if (!ackCols.includes('record_id')) {
+  try {
+    db.exec('ALTER TABLE warning_acknowledgments ADD COLUMN record_id INTEGER;');
+  } catch (_e) {}
 }
 
 // 2. Seed student roster if empty
@@ -188,8 +180,8 @@ app.get('/api/submissions', (_req, res) => {
 /** 3. Insert one new submission */
 app.post('/api/submissions', (req, res) => {
   const record = rowToRecord(req.body, 0);
-  INSERT_SUBMISSION.run(record);
-  res.status(201).json({ ok: true, _id: record._id });
+  const info = INSERT_SUBMISSION.run(record);
+  res.status(201).json({ ok: true, id: info.lastInsertRowid, _id: record._id });
 });
 
 /** 3b. Update an existing submission */
@@ -232,8 +224,8 @@ app.post('/api/submissions/clear', (_req, res) => {
 app.get('/api/acknowledgments', (_req, res) => {
   const acks = db.prepare(`
     SELECT id, unity_id as unityID, warning_type as warningType, 
-           event_timestamp as eventTimestamp, acknowledged_at as acknowledgedAt, 
-           admin_note as adminNote 
+           event_timestamp as eventTimestamp, record_id as recordId,
+           acknowledged_at as acknowledgedAt, admin_note as adminNote 
     FROM warning_acknowledgments 
     ORDER BY id DESC
   `).all();
@@ -242,16 +234,17 @@ app.get('/api/acknowledgments', (_req, res) => {
 
 /** 6. Acknowledge / Handle a warning */
 app.post('/api/acknowledgments', (req, res) => {
-  const { unityID, warningType, eventTimestamp, adminNote } = req.body;
+  const { unityID, warningType, eventTimestamp, recordId, adminNote } = req.body;
   if (!unityID || !warningType) {
     return res.status(400).json({ error: 'unityID and warningType required' });
   }
   const now = new Date().toISOString();
+  const parsedRecordId = recordId ? parseInt(recordId, 10) : null;
   const info = db.prepare(`
-    INSERT INTO warning_acknowledgments (unity_id, warning_type, event_timestamp, acknowledged_at, admin_note)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(unityID.toLowerCase().trim(), warningType.trim(), eventTimestamp || '', now, adminNote || '');
-  res.status(201).json({ ok: true, id: info.lastInsertRowid, unityID, warningType, eventTimestamp, acknowledgedAt: now, adminNote });
+    INSERT INTO warning_acknowledgments (unity_id, warning_type, event_timestamp, record_id, acknowledged_at, admin_note)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(unityID.toLowerCase().trim(), warningType.trim(), eventTimestamp || '', parsedRecordId, now, adminNote || '');
+  res.status(201).json({ ok: true, id: info.lastInsertRowid, unityID, warningType, eventTimestamp, recordId: parsedRecordId, acknowledgedAt: now, adminNote });
 });
 
 /** 7. Update an acknowledgment note */

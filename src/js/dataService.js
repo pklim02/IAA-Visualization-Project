@@ -10,10 +10,7 @@ export function normalizeCompanyName(raw) {
 export function getWarningLabel(type) {
   switch (type) {
     case 'withdraw_check': return 'Withdrawal Check (Post-Acceptance)';
-    case 'closing_support': return 'Closing Support (>2 Finals)';
-    case 'offer_decision': return 'Decision Needed (>4d)';
     case 'meeting_wanted': return 'Meeting Wanted';
-    case 'multi_offer': return 'Multi-Offer Review';
     case 'screening_polish': return 'Screening Polish (>2 Screenings)';
     case 'stalled': return 'Stalled (30+ Days)';
     default: return type;
@@ -99,14 +96,16 @@ class DataService {
         const sortedRows = [...studentRows].sort((a, b) => {
           const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
           const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
-          return tb - ta;
+          if (tb !== ta) return tb - ta;
+          return (b._dbId || 0) - (a._dbId || 0);
         });
         const latestRow = sortedRows[0];
         const wantsMeeting = (latestRow['Do you want to meet with career services to discuss further?:'] || latestRow['Do you want to meet with career services to discuss further?'] || '').trim();
         if (wantsMeeting.toLowerCase().startsWith('yes')) {
           const occurredAt = latestRow['Timestamp'] || '';
           const occurredTime = occurredAt ? new Date(occurredAt).getTime() : Date.now();
-          flags.push({ type: 'meeting_wanted', label: 'Meeting Wanted', level: 'urgent', occurredAt, occurredTime });
+          const recordId = latestRow._dbId || null;
+          flags.push({ type: 'meeting_wanted', label: 'Meeting Wanted', level: 'urgent', occurredAt, occurredTime, recordId });
         }
       }
 
@@ -133,61 +132,12 @@ class DataService {
           const latest = postAcceptInterviews[0];
           const occurredAt = latest['Timestamp'] || '';
           const occurredTime = occurredAt ? new Date(occurredAt).getTime() : Date.now();
-          flags.push({ type: 'withdraw_check', label: 'Withdrawal Check (Post-Acceptance)', level: 'warning', occurredAt, occurredTime });
+          const recordId = latest._dbId || null;
+          flags.push({ type: 'withdraw_check', label: 'Withdrawal Check (Post-Acceptance)', level: 'warning', occurredAt, occurredTime, recordId });
         }
       } else {
         // ACTIVE / SEEKING CANDIDATE LOGIC
-        // Rule 2: Holding Offer > 4 Days without decision
-        const stagnantOffers = offers.filter(r => {
-          const rDate = r['Timestamp'] ? new Date(r['Timestamp']).getTime() : 0;
-          if (!rDate) return false;
-          // Days elapsed from offer date to current real-time clock
-          const daysHeld = (now.getTime() - rDate) / (1000 * 60 * 60 * 24);
-          return daysHeld > 4;
-        }).sort((a, b) => {
-          const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
-          const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
-          return tb - ta;
-        });
-
-        if (stagnantOffers.length > 0) {
-          const latest = stagnantOffers[0];
-          const occurredAt = latest['Timestamp'] || '';
-          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : 0;
-          flags.push({ type: 'offer_decision', label: 'Decision Needed (>4d)', level: 'warning', occurredAt, occurredTime });
-        }
-
-        // Rule 3: Multiple Active Offers (holding >= 2 concurrent offers)
-        if (offers.length >= 2) {
-          const sortedOffers = [...offers].sort((a, b) => {
-            const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
-            const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
-            return tb - ta;
-          });
-          const latest = sortedOffers[0];
-          const occurredAt = latest['Timestamp'] || '';
-          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : 0;
-          flags.push({ type: 'multi_offer', label: 'Multi-Offer Review', level: 'info', occurredAt, occurredTime });
-        }
-
-        // Rule 4: Closing Support (> 2 Final Rounds and 0 Offers)
-        const finalRounds = interviews.filter(r => {
-          const stage = r['Which interview was this? '] || r['Which interview was this?'] || '';
-          return stage.toLowerCase().includes('final');
-        }).sort((a, b) => {
-          const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
-          const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
-          return tb - ta;
-        });
-
-        if (finalRounds.length > 2 && offers.length === 0) {
-          const latest = finalRounds[0];
-          const occurredAt = latest['Timestamp'] || '';
-          const occurredTime = occurredAt ? new Date(occurredAt).getTime() : 0;
-          flags.push({ type: 'closing_support', label: 'Closing Support (>2 Finals)', level: 'urgent', occurredAt, occurredTime });
-        }
-
-        // Rule 5: Screening Polish (> 2 distinct company screenings and 0 advanced rounds)
+        // Rule 2: Screening Polish (> 2 distinct company screenings and 0 advanced rounds)
         const companyPipelines = new Map();
 
         for (const r of interviews) {
@@ -203,10 +153,15 @@ class DataService {
           const tsStr = r['Timestamp'] || '';
 
           if (!companyPipelines.has(key)) {
-            companyPipelines.set(key, { companyName: cleanComp, hasScreening: false, hasAdvanced: false, latestTs: 0, latestTsStr: '' });
+            companyPipelines.set(key, { companyName: cleanComp, hasScreening: false, hasAdvanced: false, latestTs: 0, latestTsStr: '', latestRecordId: null });
           }
           const pipe = companyPipelines.get(key);
-          if (isScreening) pipe.hasScreening = true;
+          if (isScreening) {
+            pipe.hasScreening = true;
+            if (ts >= pipe.latestTs) {
+              pipe.latestRecordId = r._dbId || null;
+            }
+          }
           if (isAdvanced) pipe.hasAdvanced = true;
           if (ts >= pipe.latestTs) {
             pipe.latestTs = ts;
@@ -233,39 +188,77 @@ class DataService {
           const latest = screenedCompanies[0];
           const occurredAt = latest.latestTsStr || '';
           const occurredTime = latest.latestTs || 0;
+          const recordId = latest.latestRecordId || null;
           flags.push({
             type: 'screening_polish',
             label: 'Screening Polish (>2 Screenings)',
             level: 'warning',
             occurredAt,
-            occurredTime
+            occurredTime,
+            recordId
           });
         }
 
-        // Rule 6: Inactive / Stalled (0 activity in past 30 days)
+        // Rule 3: Inactive / Stalled (0 activity in past 30 days)
         if (this.submissions.length > 0) {
           if (studentRows.length === 0) {
-            flags.push({ type: 'stalled', label: 'Stalled (30+ Days)', level: 'muted', occurredAt: 'Cohort Inception', occurredTime: 0 });
+            flags.push({ type: 'stalled', label: 'Stalled (30+ Days)', level: 'muted', occurredAt: 'Cohort Inception', occurredTime: 0, recordId: null });
           } else if (latestStudentTs > 0) {
+            const sortedStudentRows = [...studentRows].sort((a, b) => {
+              const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
+              const tb = b['Timestamp'] ? new Date(b['Timestamp']).getTime() : 0;
+              return tb - ta;
+            });
+            const latestStudentRow = sortedStudentRows[0];
             const daysSinceActivity = (now.getTime() - latestStudentTs) / (1000 * 60 * 60 * 24);
             if (daysSinceActivity > 30) {
-              flags.push({ type: 'stalled', label: 'Stalled (30+ Days)', level: 'muted', occurredAt: new Date(latestStudentTs).toLocaleDateString(), occurredTime: latestStudentTs });
+              flags.push({ 
+                type: 'stalled', 
+                label: 'Stalled (30+ Days)', 
+                level: 'muted', 
+                occurredAt: new Date(latestStudentTs).toLocaleDateString(), 
+                occurredTime: latestStudentTs,
+                recordId: latestStudentRow?._dbId || null
+              });
             }
           }
         }
       }
 
       // Filter flags: An event is considered active if NO acknowledgment exists that covers it.
-      // An acknowledgment covers an event if either:
-      // a) ack.eventTimestamp === flag.occurredAt
-      // b) ack.acknowledgedAt is chronologically AFTER flag.occurredTime
       const activeFlags = [];
       for (const flag of flags) {
         const isCovered = studentAcks.some(a => {
           if (a.warningType !== flag.type) return false;
-          if (a.eventTimestamp && flag.occurredAt && a.eventTimestamp === flag.occurredAt) return true;
-          const ackTime = a.acknowledgedAt ? new Date(a.acknowledgedAt).getTime() : 0;
-          return ackTime >= flag.occurredTime;
+
+          // 1. Stalled: Check-in covers inactivity for up to 30 days following the check-in
+          if (flag.type === 'stalled') {
+            const ackTime = a.acknowledgedAt ? new Date(a.acknowledgedAt).getTime() : 0;
+            const daysSinceCheckin = (now.getTime() - ackTime) / (1000 * 60 * 60 * 24);
+            if (daysSinceCheckin <= 30 && (!flag.occurredTime || ackTime >= flag.occurredTime)) {
+              return true;
+            }
+            return false;
+          }
+
+          // 2. Submission-driven flags (withdraw_check, meeting_wanted, screening_polish):
+          // If recordId is available, covered only if acknowledgment was recorded for THIS record or a NEWER record
+          if (a.recordId && flag.recordId) {
+            return a.recordId >= flag.recordId;
+          }
+
+          // Fallback to timestamp comparison
+          if (a.eventTimestamp && flag.occurredAt && a.eventTimestamp === flag.occurredAt) {
+            return true;
+          }
+          if (a.eventTimestamp && flag.occurredTime) {
+            const aTime = new Date(a.eventTimestamp).getTime();
+            if (!isNaN(aTime) && aTime >= flag.occurredTime) {
+              return true;
+            }
+          }
+
+          return false;
         });
         if (!isCovered) {
           activeFlags.push(flag);
@@ -276,6 +269,7 @@ class DataService {
       const handledFlags = studentAcks.map(a => ({
         id: a.id,
         type: a.warningType,
+        recordId: a.recordId || null,
         label: getWarningLabel(a.warningType),
         eventTimestamp: a.eventTimestamp || '',
         acknowledgedAt: a.acknowledgedAt || '',
@@ -388,13 +382,13 @@ class DataService {
   }
 
   /**
-   * Approach A: Acknowledge / Mark a warning as handled with event timestamp & optional coaching note
+   * Approach A: Acknowledge / Mark a warning as handled with event timestamp, optional record ID & coaching note
    */
-  async acknowledgeWarning(unityID, warningType, eventTimestamp = '', adminNote = '') {
+  async acknowledgeWarning(unityID, warningType, eventTimestamp = '', adminNote = '', recordId = null) {
     const res = await fetch('/api/acknowledgments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ unityID, warningType, eventTimestamp, adminNote })
+      body: JSON.stringify({ unityID, warningType, eventTimestamp, adminNote, recordId })
     });
     if (!res.ok) throw new Error('Failed to acknowledge warning');
     await this.fetchData();
@@ -552,9 +546,6 @@ class DataService {
       attention: {
         totalNeedsAttention: needsAttentionStudents.length,
         meetingWanted: this.students.filter(s => s.attentionFlags.some(f => f.type === 'meeting_wanted')).length,
-        offerImpending: this.students.filter(s => s.attentionFlags.some(f => f.type === 'offer_decision')).length,
-        multiOffer: this.students.filter(s => s.attentionFlags.some(f => f.type === 'multi_offer')).length,
-        closingSupport: this.students.filter(s => s.attentionFlags.some(f => f.type === 'closing_support')).length,
         screeningPolish: this.students.filter(s => s.attentionFlags.some(f => f.type === 'screening_polish')).length,
         stalled: this.students.filter(s => s.attentionFlags.some(f => f.type === 'stalled')).length,
         withdrawCheck: this.students.filter(s => s.attentionFlags.some(f => f.type === 'withdraw_check')).length
