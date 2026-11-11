@@ -3,26 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NC STATE IAA • Employment Tracker</title>
+  <title>Employment Tracker | NC State IAA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;1,400&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./src/css/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#app-body">Skip to main content</a>
   <div id="app" class="app-layout">
     <!-- Top Minimalist Masthead with Exactly 2 Action Buttons -->
     <header class="app-header">
       <div class="header-brand">
-        <span class="brick-logo">NC STATE</span>
+        <div class="brand-lockup">
+          <span class="brand-univ">NC State University</span>
+          <span class="brand-unit">Institute for Advanced Analytics</span>
+        </div>
         <div>
-          <h1 class="header-title">NC STATE IAA &bull; Employment Tracker</h1>
-          <div class="header-sub">Candidate Recruitment Tracker &bull; Class of 2027</div>
+          <h1 class="header-title">Employment Tracker</h1>
+          <div class="header-sub">Class of 2027</div>
         </div>
       </div>
 
       <!-- Navigation Mode Switcher -->
-      <nav class="header-nav">
+      <nav class="header-nav" aria-label="Dashboard sections">
         <button id="nav-overview" class="nav-tab active" data-mode="overview">
           Candidate Overview
         </button>
@@ -38,7 +42,7 @@
       </nav>
 
       <div class="header-actions">
-        <button id="btn-upload-csv" class="btn btn-primary" title="Import synthetic or live recruitment CSV">
+        <button id="btn-upload-csv" class="btn btn-primary" title="Import a recruitment CSV">
           Import CSV
         </button>
         <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
@@ -50,7 +54,7 @@
     </header>
 
     <!-- Master-Detail Single Screen Container -->
-    <main id="app-body">
+    <main id="app-body" tabindex="-1">
       <!-- Injected by main.js -->
     </main>
   </div>

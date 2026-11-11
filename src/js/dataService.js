@@ -128,6 +128,7 @@ class DataService {
           return (b._dbId || 0) - (a._dbId || 0);
         });
 
+        // Stays flagged until Career Services marks it handled (no time window).
         if (postAcceptInterviews.length > 0) {
           const latest = postAcceptInterviews[0];
           const occurredAt = latest['Timestamp'] || '';
@@ -202,7 +203,7 @@ class DataService {
         // Rule 3: Inactive / Stalled (0 activity in past 30 days)
         if (this.submissions.length > 0) {
           if (studentRows.length === 0) {
-            flags.push({ type: 'stalled', label: 'Stalled (30+ Days)', level: 'muted', occurredAt: 'Cohort Inception', occurredTime: 0, recordId: null });
+            flags.push({ type: 'stalled', label: 'Stalled (30+ Days)', level: 'warning', occurredAt: 'Cohort Inception', occurredTime: 0, recordId: null });
           } else if (latestStudentTs > 0) {
             const sortedStudentRows = [...studentRows].sort((a, b) => {
               const ta = a['Timestamp'] ? new Date(a['Timestamp']).getTime() : 0;
@@ -215,7 +216,7 @@ class DataService {
               flags.push({ 
                 type: 'stalled', 
                 label: 'Stalled (30+ Days)', 
-                level: 'muted', 
+                level: 'warning', 
                 occurredAt: new Date(latestStudentTs).toLocaleDateString(), 
                 occurredTime: latestStudentTs,
                 recordId: latestStudentRow?._dbId || null
@@ -468,19 +469,61 @@ class DataService {
     };
   }
 
+  /**
+   * Student-based funnel: how many UNIQUE students reached each stage.
+   * Each stage includes everyone who got at least that far, so the counts only ever shrink.
+   */
+  getStudentFunnel() {
+    const funnel = { interviewing: 0, technical: 0, finalRound: 0, offer: 0, placed: 0 };
+    for (const stu of this.students) {
+      let reachedTech = false, reachedFinal = false;
+      for (const r of stu.history) {
+        if ((r['What are you reporting today?'] || '').trim() !== 'Interview') continue;
+        const stage = (r['Which interview was this? '] || r['Which interview was this?'] || '').toLowerCase();
+        if (!stage.includes('screen')) reachedTech = true;
+        if (stage.includes('final')) reachedFinal = true;
+      }
+      const hasOffer = stu.offerCount > 0 || stu.isPlaced;
+      if (stu.interviewCount > 0 || hasOffer) funnel.interviewing++;
+      if (reachedTech || reachedFinal || hasOffer) funnel.technical++;
+      if (reachedFinal || hasOffer) funnel.finalRound++;
+      if (hasOffer) funnel.offer++;
+      if (stu.isPlaced) funnel.placed++;
+    }
+    return funnel;
+  }
+
+  /**
+   * Ranked "who to contact" list. Routine post-acceptance reminders are
+   * deliberately excluded here so they don't bury students who need coaching.
+   */
+  getPriorityQueue() {
+    const weight = { meeting_wanted: 3, screening_polish: 2, stalled: 1 };
+    const queue = [];
+    for (const stu of this.students) {
+      const flags = stu.attentionFlags.filter(f => weight[f.type]);
+      if (flags.length === 0) continue;
+      const top = flags.reduce((a, b) => (weight[b.type] > weight[a.type] ? b : a));
+      queue.push({
+        unityID: stu.unityID,
+        name: stu.name,
+        avatarUrl: stu.avatarUrl,
+        status: stu.status,
+        flags: flags.map(f => ({ type: f.type, label: f.label, occurredAt: f.occurredAt || '', recordId: f.recordId || null })),
+        score: flags.reduce((n, f) => n + weight[f.type], 0) * 10 + weight[top.type],
+        occurredTime: top.occurredTime || 0
+      });
+    }
+    queue.sort((a, b) => b.score - a.score || b.occurredTime - a.occurredTime);
+    return queue;
+  }
+
   getData() {
     const totalStudents = this.students.length;
     const placedCount = this.students.filter(s => s.status === 'Placed').length;
     const offerCount = this.students.filter(s => s.status === 'Has Offer').length;
     const interviewingCount = this.students.filter(s => s.status === 'Interviewing').length;
     const seekingCount = this.students.filter(s => s.status === 'Seeking').length;
-
-    // Recruitment Pipeline Funnel Totals
-    let screeningTotal = 0;
-    let roundOneTwoTotal = 0;
-    let finalRoundTotal = 0;
-    let offersTotal = 0;
-    let acceptanceTotal = 0;
 
     // Company & Source tallies
     const companyTally = {};
@@ -492,19 +535,13 @@ class DataService {
       const source = (r['How did you hear about the job?'] || '').trim();
 
       if (type === 'Interview') {
-        if (stage.includes('screen')) screeningTotal++;
-        else if (stage.includes('final')) finalRoundTotal++;
-        else roundOneTwoTotal++;
-
         if (source) {
           sourceTally[source] = (sourceTally[source] || 0) + 1;
         }
       } else if (type === 'Offer') {
-        offersTotal++;
         const comp = (r['Please list the company and job title'] || '').split(',')[0].trim();
         if (comp) companyTally[comp] = (companyTally[comp] || 0) + 1;
       } else if (type === 'Acceptance') {
-        acceptanceTotal++;
         const comp = (r['Please list the company name and job title. '] || r['Please list the company name and job title.'] || '').split(',')[0].trim();
         if (comp) companyTally[comp] = (companyTally[comp] || 0) + 1;
       }
@@ -534,13 +571,8 @@ class DataService {
       interviewingCount,
       seekingCount,
       placedRate: totalStudents > 0 ? Math.round((placedCount / totalStudents) * 100) : 0,
-      funnel: {
-        screening: screeningTotal,
-        roundOneTwo: roundOneTwoTotal,
-        finalRound: finalRoundTotal,
-        offers: offersTotal,
-        acceptance: acceptanceTotal
-      },
+      funnel: this.getStudentFunnel(),
+      priorityQueue: this.getPriorityQueue(),
       topCompanies,
       topSources,
       attention: {

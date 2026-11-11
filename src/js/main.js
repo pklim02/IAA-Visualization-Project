@@ -1,10 +1,12 @@
 import { dataService } from './dataService.js';
+import { enhance, restoreFocus, captureFocus, initModalA11y } from './a11y.js';
 
 let currentMode = 'overview'; // 'overview' | 'student-entry'
 let selectedUnityID = null;
 let entryUnityID = null;
 let searchTerm = '';
-let attentionFilter = 'all'; // 'all' | 'needs_attention' | 'meeting' | 'screening_polish' | 'withdraw_check' | 'stalled'
+let mobileShowDetail = false; // phones: show the candidate list OR the profile, not both
+let attentionFilter = 'all'; // 'all' | 'interviewing' | 'needs_attention' | 'meeting' | 'screening_polish' | 'withdraw_check' | 'stalled'
 
 function getStatusBadgeClass(status) {
   switch (status) {
@@ -27,7 +29,7 @@ function getAttentionBadgeClass(level) {
 function getAttentionGuidance(flag) {
   switch (flag.type) {
     case 'withdraw_check':
-      return 'Candidate accepted an offer but continues logging interview rounds. Recommended: Remind candidate to formally and politely withdraw from other companies\' interview loops.';
+      return 'Candidate accepted an offer but logged another interview afterward. Recommended: Remind candidate to formally and politely withdraw from other companies\' interview loops.';
     case 'meeting_wanted':
       return 'Candidate explicitly requested a meeting with Career Services in their latest submission.';
     case 'screening_polish':
@@ -89,6 +91,8 @@ function renderOverview(container, data) {
 
     if (attentionFilter === 'needs_attention') {
       return s.attentionFlag !== null;
+    } else if (attentionFilter === 'interviewing') {
+      return s.status === 'Interviewing';
     } else if (attentionFilter === 'withdraw_check') {
       return s.attentionFlags && s.attentionFlags.some(f => f.type === 'withdraw_check');
     } else if (attentionFilter === 'meeting') {
@@ -121,7 +125,7 @@ function renderOverview(container, data) {
 
     acceptedCard = `
       <div class="card accepted-card">
-        <h3 class="section-title">ACCEPTED POSITION (Verbatim from CSV)</h3>
+        <h3 class="section-title">Accepted position</h3>
         <div class="accepted-grid">
           <div class="field-item">
             <span class="field-label">Company &amp; Role:</span>
@@ -145,7 +149,7 @@ function renderOverview(container, data) {
   } else if (selectedStudent) {
     acceptedCard = `
       <div class="card accepted-card neutral-state">
-        <h3 class="section-title">ACCEPTED POSITION (Verbatim from CSV)</h3>
+        <h3 class="section-title">Accepted position</h3>
         <p class="neutral-text">No accepted offer recorded yet. Candidate is currently active in recruitment.</p>
       </div>
     `;
@@ -207,88 +211,94 @@ function renderOverview(container, data) {
   }
 
   container.innerHTML = `
-    <div class="master-detail-layout">
+    <div class="master-detail-layout ${mobileShowDetail ? 'show-detail' : ''}">
       <!-- Left Column: CANDIDATE LIST -->
       <aside class="candidates-sidebar">
         <div class="sidebar-header">
           <div class="sidebar-header-row">
-            <span class="sidebar-title">CANDIDATE LIST</span>
+            <h2 class="sidebar-title">Candidates</h2>
             <span class="sidebar-count">${filteredStudents.length} / ${students.length}</span>
           </div>
           <input 
             type="text" 
             id="search-input" 
             class="search-input" 
+            aria-label="Filter candidates by name or Unity ID"
             placeholder="Filter candidates..." 
             value="${escapeHtml(searchTerm)}"
           />
           <div class="attention-filter-strip">
-            <button class="filter-chip ${attentionFilter === 'all' ? 'active' : ''}" data-filter="all">
+            <button class="filter-chip ${attentionFilter === 'all' ? 'active' : ''}" aria-pressed="${attentionFilter === 'all'}" data-filter="all">
               All (${students.length})
             </button>
-            <button class="filter-chip chip-attention ${attentionFilter === 'needs_attention' ? 'active' : ''}" data-filter="needs_attention">
+            <button class="filter-chip ${attentionFilter === 'interviewing' ? 'active' : ''}" aria-pressed="${attentionFilter === 'interviewing'}" data-filter="interviewing">
+              Interviewing (${students.filter(s => s.status === 'Interviewing').length})
+            </button>
+            <button class="filter-chip chip-attention ${attentionFilter === 'needs_attention' ? 'active' : ''}" aria-pressed="${attentionFilter === 'needs_attention'}" data-filter="needs_attention">
               Needs Attention (${attentionCounts.totalNeedsAttention || 0})
             </button>
             ${(attentionCounts.withdrawCheck || 0) > 0 ? `
-              <button class="filter-chip chip-warning ${attentionFilter === 'withdraw_check' ? 'active' : ''}" data-filter="withdraw_check">
+              <button class="filter-chip chip-warning ${attentionFilter === 'withdraw_check' ? 'active' : ''}" aria-pressed="${attentionFilter === 'withdraw_check'}" data-filter="withdraw_check">
                 Post-Acceptance (${attentionCounts.withdrawCheck})
               </button>
             ` : ''}
             ${(attentionCounts.meetingWanted || 0) > 0 ? `
-              <button class="filter-chip chip-urgent ${attentionFilter === 'meeting' ? 'active' : ''}" data-filter="meeting">
+              <button class="filter-chip chip-urgent ${attentionFilter === 'meeting' ? 'active' : ''}" aria-pressed="${attentionFilter === 'meeting'}" data-filter="meeting">
                 Meetings (${attentionCounts.meetingWanted})
               </button>
             ` : ''}
             ${(attentionCounts.screeningPolish || 0) > 0 ? `
-              <button class="filter-chip chip-warning ${attentionFilter === 'screening_polish' ? 'active' : ''}" data-filter="screening_polish">
+              <button class="filter-chip chip-warning ${attentionFilter === 'screening_polish' ? 'active' : ''}" aria-pressed="${attentionFilter === 'screening_polish'}" data-filter="screening_polish">
                 Screening (${attentionCounts.screeningPolish})
               </button>
             ` : ''}
             ${(attentionCounts.stalled || 0) > 0 ? `
-              <button class="filter-chip chip-muted ${attentionFilter === 'stalled' ? 'active' : ''}" data-filter="stalled">
+              <button class="filter-chip chip-muted ${attentionFilter === 'stalled' ? 'active' : ''}" aria-pressed="${attentionFilter === 'stalled'}" data-filter="stalled">
                 Stalled (${attentionCounts.stalled})
               </button>
             ` : ''}
           </div>
         </div>
 
-        <div class="candidates-scroll">
+        <div class="candidates-scroll" tabindex="0" role="region" aria-label="Candidate list">
           ${filteredStudents.length === 0 ? `
             <div class="empty-candidates">No candidates match the selected filter.</div>
           ` : filteredStudents.map(s => `
-            <div 
+            <button type="button"
               class="candidate-row ${s.unityID === selectedUnityID ? 'selected' : ''}" 
               data-id="${s.unityID}"
+              ${s.unityID === selectedUnityID ? 'aria-current="true"' : ''}
             >
               <img 
                 src="${s.avatarUrl}" 
-                alt="${escapeHtml(s.name)}" 
+                alt="" 
                 class="candidate-avatar"
                 onerror="this.src='/data/avatars/default.png'"
               />
-              <div class="candidate-meta">
-                <div class="candidate-name">${escapeHtml(s.name)}</div>
-                <div class="candidate-sub">
+              <span class="candidate-meta">
+                <span class="candidate-name">${escapeHtml(s.name)}</span>
+                <span class="candidate-sub">
                   <span class="candidate-unity">${escapeHtml(s.unityID)}</span>
                   <span class="status-badge ${getStatusBadgeClass(s.status)}">${s.status}</span>
-                </div>
+                </span>
                 ${s.attentionFlags && s.attentionFlags.length > 0 ? `
-                  <div class="candidate-flags-stack">
+                  <span class="candidate-flags-stack">
                     ${s.attentionFlags.map(f => `
-                      <span class="attention-badge ${getAttentionBadgeClass(f.level)}" title="${escapeHtml(f.label)}">
+                      <span class="attention-badge ${getAttentionBadgeClass(f.level)}">
                         ${escapeHtml(f.label)}
                       </span>
                     `).join('')}
-                  </div>
+                  </span>
                 ` : ''}
-              </div>
-            </div>
+              </span>
+            </button>
           `).join('')}
         </div>
       </aside>
 
       <!-- Right Column: CANDIDATE DETAILS -->
-      <section class="candidate-detail-pane">
+      <section class="candidate-detail-pane" tabindex="0" role="region" aria-label="Candidate profile">
+        <button type="button" class="btn btn-secondary back-to-list" id="btn-back-to-list">&larr; All candidates</button>
         ${!selectedStudent ? `
           <div class="empty-selection">Select a candidate on the left to view dossier</div>
         ` : `
@@ -296,7 +306,7 @@ function renderOverview(container, data) {
           <div class="dossier-header">
             <img 
               src="${selectedStudent.avatarUrl}" 
-              alt="${escapeHtml(selectedStudent.name)}" 
+              alt="" 
               class="dossier-avatar"
               onerror="this.src='/data/avatars/default.png'"
             />
@@ -406,7 +416,7 @@ function renderOverview(container, data) {
             </div>
           </div>
 
-          <!-- ACCEPTED POSITION (Verbatim from CSV) -->
+          <!-- Accepted position -->
           ${acceptedCard}
 
           <!-- LOGGED SUBMISSIONS Stream -->
@@ -442,10 +452,16 @@ function renderOverview(container, data) {
     });
   });
 
+  container.querySelector('#btn-back-to-list')?.addEventListener('click', () => {
+    mobileShowDetail = false;
+    renderApp();
+  });
+
   // Candidate selection click handler
   container.querySelectorAll('.candidate-row').forEach(row => {
     row.addEventListener('click', () => {
       selectedUnityID = row.getAttribute('data-id');
+      mobileShowDetail = true;
       renderApp();
     });
   });
@@ -536,240 +552,200 @@ function renderOverview(container, data) {
  *  MODE 2: CLASS ANALYTICS (AGGREGATED COHORT VISUALS)
  *  ---------------------------------------------------- */
 function renderAnalytics(container, data) {
-  const total = data.totalStudents || 75;
+  const total = data.totalStudents || 0;
   const placedCount = data.placedCount || 0;
   const offerCount = data.offerCount || 0;
   const interviewCount = data.interviewingCount || 0;
   const seekingCount = data.seekingCount || 0;
+  const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  const placedPct = pct(placedCount);
+  const stillSearching = total - placedCount;
 
-  const placedPct = total > 0 ? Math.round((placedCount / total) * 100) : 0;
-  const offerPct = total > 0 ? Math.round((offerCount / total) * 100) : 0;
-  const interviewPct = total > 0 ? Math.round((interviewCount / total) * 100) : 0;
-  const seekingPct = Math.max(0, 100 - placedPct - offerPct - interviewPct);
-
-  const funnel = data.funnel || { screening: 0, roundOneTwo: 0, finalRound: 0, offers: 0, acceptance: 0 };
-  const attention = data.attention || {
-    totalNeedsAttention: 0,
-    meetingWanted: 0,
-    screeningPolish: 0,
-    withdrawCheck: 0,
-    stalled: 0
-  };
+  const funnel = data.funnel || { interviewing: 0, technical: 0, finalRound: 0, offer: 0, placed: 0 };
+  const attention = data.attention || {};
+  const queue = data.priorityQueue || [];
+  const QUEUE_LIMIT = 8;
+  const shown = queue.slice(0, QUEUE_LIMIT);
 
   const topCompanies = data.topCompanies || [];
   const topSources = data.topSources || [];
   const maxCompanyCount = topCompanies.length > 0 ? topCompanies[0].count : 1;
   const totalSourcesCount = topSources.reduce((acc, s) => acc + s.count, 0) || 1;
 
+  const reasonText = (f) => {
+    switch (f.type) {
+      case 'meeting_wanted': return 'Asked to meet with Career Services';
+      case 'screening_polish': return 'Several screenings, none advanced';
+      case 'stalled': return f.occurredAt === 'Cohort Inception' ? 'Has not reported any activity yet' : 'No activity logged in 30+ days';
+      default: return f.label;
+    }
+  };
+
+  const stages = [
+    { name: 'Interviewing', note: 'Logged at least one interview', n: funnel.interviewing },
+    { name: 'Past screening', note: 'Reached a first or second round', n: funnel.technical },
+    { name: 'Final round', note: 'Reached a final round or later', n: funnel.finalRound },
+    { name: 'Offer in hand', note: 'Received at least one offer', n: funnel.offer },
+    { name: 'Placed', note: 'Accepted an offer', n: funnel.placed }
+  ];
+
   container.innerHTML = `
     <div class="analytics-page">
       <div class="analytics-header">
-        <div>
-          <h2 class="analytics-title">Cohort Recruitment Analytics</h2>
-          <div class="analytics-sub">Class of 2027 &bull; ${total} Total Candidates &bull; ${data.totalSubmissions} Logged Activity Records</div>
-        </div>
+        <h2 class="analytics-title">Class of 2027 recruiting</h2>
+        <div class="analytics-sub">${total} students &middot; ${data.totalSubmissions} submissions logged</div>
       </div>
 
-      <!-- VISUAL 1: COHORT PLACEMENT MILESTONE GAUGE -->
-      <div class="card analytics-card">
+      <section class="headline-band">
+        <div class="headline-figure">
+          <div class="headline-num">${placedPct}%</div>
+          <div class="headline-label">placed</div>
+        </div>
+        <div class="headline-detail">
+          <p class="headline-sentence"><strong>${placedCount} of ${total}</strong> students have accepted an offer. <strong>${stillSearching}</strong> are still searching${queue.length ? `, and <strong>${queue.length}</strong> of them could use a conversation with Career Services` : ''}.</p>
+          <div class="status-bar" role="img" aria-label="${placedCount} placed, ${offerCount} holding offers, ${interviewCount} interviewing, ${seekingCount} not yet interviewing">
+            <div class="status-seg seg-placed" style="width:${pct(placedCount)}%"></div>
+            <div class="status-seg seg-offer" style="width:${pct(offerCount)}%"></div>
+            <div class="status-seg seg-interview" style="width:${pct(interviewCount)}%"></div>
+            <div class="status-seg seg-seeking" style="width:${Math.max(0, 100 - pct(placedCount) - pct(offerCount) - pct(interviewCount))}%"></div>
+          </div>
+          <ul class="status-key">
+            <li><span class="key-swatch seg-placed"></span>Placed <strong>${placedCount}</strong></li>
+            <li><span class="key-swatch seg-offer"></span>Holding offer <strong>${offerCount}</strong></li>
+            <li><span class="key-swatch seg-interview"></span>Interviewing <strong>${interviewCount}</strong></li>
+            <li><span class="key-swatch seg-seeking"></span>Not yet interviewing <strong>${seekingCount}</strong></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="analytics-card">
         <div class="card-header-clean">
-          <h3 class="section-title">1. Cohort Placement Progress (${placedPct}% Placed)</h3>
-          <span class="card-meta-tag">${placedCount} of ${total} Candidates Placed</span>
+          <h3 class="section-title">Who to contact first</h3>
+          <span class="card-meta-tag">${queue.length} ${queue.length === 1 ? 'student' : 'students'} need coaching</span>
         </div>
-
-        <!-- Horizontal Segmented Progress Bar -->
-        <div class="milestone-bar-container">
-          <div class="milestone-segment seg-placed" style="width: ${placedPct}%;" title="Placed: ${placedCount} (${placedPct}%)"></div>
-          <div class="milestone-segment seg-offer" style="width: ${offerPct}%;" title="Holding Offer: ${offerCount} (${offerPct}%)"></div>
-          <div class="milestone-segment seg-interview" style="width: ${interviewPct}%;" title="Interviewing: ${interviewCount} (${interviewPct}%)"></div>
-          <div class="milestone-segment seg-seeking" style="width: ${seekingPct}%;" title="Seeking: ${seekingCount} (${seekingPct}%)"></div>
+        ${queue.length === 0 ? `<div class="empty-stream">No students need coaching right now.</div>` : `
+          <ol class="priority-list">
+            ${shown.map((q, i) => `
+              <li class="priority-row">
+                <span class="priority-rank">${i + 1}</span>
+                <img class="priority-avatar" src="${escapeHtml(q.avatarUrl)}" alt="" onerror="this.style.visibility='hidden'">
+                <div class="priority-who">
+                  <div class="priority-name">${escapeHtml(q.name)}</div>
+                  <div class="priority-reason">${q.flags.map(reasonText).map(escapeHtml).join(' &middot; ')}</div>
+                </div>
+                <span class="status-badge ${getStatusBadgeClass(q.status)}">${escapeHtml(q.status)}</span>
+                <span class="priority-actions">
+                  <button class="btn btn-secondary priority-open" data-student="${escapeHtml(q.unityID)}" aria-label="Open profile for ${escapeHtml(q.name)}">Open profile</button>
+                  <button class="btn btn-secondary priority-handled" data-handled="${escapeHtml(q.unityID)}" aria-label="Mark ${escapeHtml(q.name)} as handled">Mark handled</button>
+                </span>
+              </li>`).join('')}
+          </ol>
+          ${queue.length > QUEUE_LIMIT ? `<div class="priority-more">Showing the top ${QUEUE_LIMIT} of ${queue.length}. <button class="link-btn" data-jump="needs_attention">See everyone flagged</button></div>` : ''}
+        `}
+        <div class="routine-row">
+          <div>
+            <div class="routine-title">Routine reminders</div>
+            <div class="routine-desc">${attention.withdrawCheck || 0} placed ${attention.withdrawCheck === 1 ? 'student' : 'students'} logged an interview after accepting and are waiting on a reminder. A quick nudge to withdraw politely from other processes.</div>
+          </div>
+          <button class="btn btn-secondary" data-jump="withdraw_check">View ${attention.withdrawCheck || 0}</button>
         </div>
+      </section>
 
-        <!-- Milestone Legend / Stats -->
-        <div class="milestone-legend-grid">
-          <div class="legend-box item-placed">
-            <div class="legend-color-dot dot-placed"></div>
-            <div>
-              <div class="legend-val">${placedCount} <span class="legend-pct">(${placedPct}%)</span></div>
-              <div class="legend-label">Placed (Accepted)</div>
-            </div>
-          </div>
-          <div class="legend-box item-offer">
-            <div class="legend-color-dot dot-offer"></div>
-            <div>
-              <div class="legend-val">${offerCount} <span class="legend-pct">(${offerPct}%)</span></div>
-              <div class="legend-label">Holding Offers</div>
-            </div>
-          </div>
-          <div class="legend-box item-interview">
-            <div class="legend-color-dot dot-interview"></div>
-            <div>
-              <div class="legend-val">${interviewCount} <span class="legend-pct">(${interviewPct}%)</span></div>
-              <div class="legend-label">Actively Interviewing</div>
-            </div>
-          </div>
-          <div class="legend-box item-seeking">
-            <div class="legend-color-dot dot-seeking"></div>
-            <div>
-              <div class="legend-val">${seekingCount} <span class="legend-pct">(${seekingPct}%)</span></div>
-              <div class="legend-label">Seeking Opportunities</div>
-            </div>
-          </div>
+      <section class="analytics-card">
+        <h3 class="section-title">Where students are in the process</h3>
+        <p class="card-intro">Unique students who reached each stage. Everyone counted in a stage is also counted in the stages before it.</p>
+        <div class="stage-list">
+          ${stages.map((s, i) => {
+            const prev = i === 0 ? total : stages[i - 1].n;
+            const lost = prev - s.n;
+            return `
+            <div class="stage-row">
+              <div class="stage-label">
+                <div class="stage-name">${s.name}</div>
+                <div class="stage-note">${s.note}</div>
+              </div>
+              <div class="stage-track"><div class="stage-bar ${i === stages.length - 1 ? 'bar-final' : ''}" style="width:${pct(s.n)}%"></div></div>
+              <div class="stage-figures">
+                <span class="stage-n">${s.n}</span>
+                <span class="stage-pct">${pct(s.n)}% of class</span>
+              </div>
+              <div class="stage-drop">${i === 0 ? (lost > 0 ? `${lost} not yet interviewing` : '') : (lost > 0 ? `${lost} did not advance` : '')}</div>
+            </div>`;
+          }).join('')}
         </div>
-      </div>
+      </section>
 
-      <!-- VISUAL 2: RECRUITMENT PIPELINE FUNNEL HEALTH -->
-      <div class="card analytics-card">
-        <h3 class="section-title">2. Recruitment Pipeline Conversion Funnel</h3>
-        <div class="funnel-grid">
-          <div class="funnel-step">
-            <div class="funnel-step-num">${funnel.screening}</div>
-            <div class="funnel-step-name">Recruiter Screenings</div>
-            <div class="funnel-step-sub">Initial touches</div>
-          </div>
-          <div class="funnel-arrow">&rarr;</div>
-
-          <div class="funnel-step">
-            <div class="funnel-step-num">${funnel.roundOneTwo}</div>
-            <div class="funnel-step-name">Technical / 1st &amp; 2nd</div>
-            <div class="funnel-step-sub">In-depth evaluations</div>
-          </div>
-          <div class="funnel-arrow">&rarr;</div>
-
-          <div class="funnel-step">
-            <div class="funnel-step-num">${funnel.finalRound}</div>
-            <div class="funnel-step-name">Final Rounds</div>
-            <div class="funnel-step-sub">Superdays &amp; onsite</div>
-          </div>
-          <div class="funnel-arrow">&rarr;</div>
-
-          <div class="funnel-step step-offer">
-            <div class="funnel-step-num">${funnel.offers}</div>
-            <div class="funnel-step-name">Offers Extended</div>
-            <div class="funnel-step-sub">Formal job offers</div>
-          </div>
-          <div class="funnel-arrow">&rarr;</div>
-
-          <div class="funnel-step step-placed">
-            <div class="funnel-step-num">${funnel.acceptance}</div>
-            <div class="funnel-step-name">Offers Accepted</div>
-            <div class="funnel-step-sub">Secured placements</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- VISUAL 3: COHORT ATTENTION & EARLY WARNING QUEUE -->
-      <div class="card analytics-card">
-        <div class="card-header-clean">
-          <h3 class="section-title">3. Early Warning &amp; Candidate Intervention Queue</h3>
-          <span class="card-meta-tag ${attention.totalNeedsAttention > 0 ? 'tag-warning' : 'tag-neutral'}">
-            ${attention.totalNeedsAttention} Candidates Requiring Support
-          </span>
-        </div>
-
-        <div class="attention-kpi-grid">
-          <!-- 1. Post-Acceptance Interviewing / Withdrawal Check -->
-          <div class="attention-kpi-card kpi-warning" data-jump="withdraw_check">
-            <div class="kpi-card-header">
-              <span class="kpi-card-badge badge-attention-warning">Withdrawal Check</span>
-              <span class="kpi-card-count">${attention.withdrawCheck || 0}</span>
-            </div>
-            <div class="kpi-card-desc">Placed candidate logged an interview after accepting an offer. Needs prompt to politely withdraw from other pipelines.</div>
-            <button class="kpi-jump-btn" data-jump="withdraw_check">View Candidates &rarr;</button>
-          </div>
-
-          <!-- 2. Meeting Wanted -->
-          <div class="attention-kpi-card kpi-urgent" data-jump="meeting">
-            <div class="kpi-card-header">
-              <span class="kpi-card-badge badge-attention-urgent">Meeting Wanted</span>
-              <span class="kpi-card-count">${attention.meetingWanted || 0}</span>
-            </div>
-            <div class="kpi-card-desc">Candidate explicitly requested a 1-on-1 Career Services meeting in their submission.</div>
-            <button class="kpi-jump-btn" data-jump="meeting">View Candidates &rarr;</button>
-          </div>
-
-          <!-- 3. Screening Polish -->
-          <div class="attention-kpi-card kpi-warning" data-jump="screening_polish">
-            <div class="kpi-card-header">
-              <span class="kpi-card-badge badge-attention-warning">Screening Polish</span>
-              <span class="kpi-card-count">${attention.screeningPolish || 0}</span>
-            </div>
-            <div class="kpi-card-desc">&gt; 2 Company screenings without advancing to second or final rounds. Needs pitch review.</div>
-            <button class="kpi-jump-btn" data-jump="screening_polish">View Candidates &rarr;</button>
-          </div>
-
-          <!-- 4. Stalled (30+ Days) -->
-          <div class="attention-kpi-card kpi-muted" data-jump="stalled">
-            <div class="kpi-card-header">
-              <span class="kpi-card-badge badge-attention-muted">Stalled (30+ Days)</span>
-              <span class="kpi-card-count">${attention.stalled || 0}</span>
-            </div>
-            <div class="kpi-card-desc">Active candidate has logged zero recruitment activity in the past 30 days. Needs check-in.</div>
-            <button class="kpi-jump-btn" data-jump="stalled">View Candidates &rarr;</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- VISUAL 4: TOP HIRING PARTNERS & CHANNEL YIELD -->
       <div class="analytics-dual-row">
-        <!-- Top Employers -->
-        <div class="card analytics-card">
-          <h3 class="section-title">4A. Top Hiring &amp; Offer Partners</h3>
-          ${topCompanies.length === 0 ? `
-            <div class="empty-stream">No employer offers recorded yet.</div>
-          ` : `
+        <section class="analytics-card">
+          <h3 class="section-title">Top employers by offers and acceptances</h3>
+          ${topCompanies.length === 0 ? `<div class="empty-stream">No employer offers recorded yet.</div>` : `
             <div class="leaderboard-list">
               ${topCompanies.map(c => `
                 <div class="leaderboard-row">
                   <div class="leaderboard-meta">
                     <span class="leaderboard-name">${escapeHtml(c.name)}</span>
-                    <span class="leaderboard-count">${c.count} ${c.count === 1 ? 'offer' : 'offers'}</span>
+                    <span class="leaderboard-count">${c.count}</span>
                   </div>
-                  <div class="leaderboard-track">
-                    <div class="leaderboard-bar" style="width: ${(c.count / maxCompanyCount) * 100}%;"></div>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          `}
-        </div>
+                  <div class="leaderboard-track"><div class="leaderboard-bar" style="width:${(c.count / maxCompanyCount) * 100}%"></div></div>
+                </div>`).join('')}
+            </div>`}
+        </section>
 
-        <!-- Sourcing Channels -->
-        <div class="card analytics-card">
-          <h3 class="section-title">4B. Interview Sourcing Channels</h3>
-          ${topSources.length === 0 ? `
-            <div class="empty-stream">No interview sources recorded yet.</div>
-          ` : `
+        <section class="analytics-card">
+          <h3 class="section-title">How students found their interviews</h3>
+          ${topSources.length === 0 ? `<div class="empty-stream">No interview sources recorded yet.</div>` : `
             <div class="leaderboard-list">
               ${topSources.map(s => {
-                const pct = Math.round((s.count / totalSourcesCount) * 100);
+                const p = Math.round((s.count / totalSourcesCount) * 100);
                 return `
-                  <div class="leaderboard-row">
-                    <div class="leaderboard-meta">
-                      <span class="leaderboard-name">${escapeHtml(s.name)}</span>
-                      <span class="leaderboard-count">${s.count} (${pct}%)</span>
-                    </div>
-                    <div class="leaderboard-track">
-                      <div class="leaderboard-bar bar-teal" style="width: ${pct}%;"></div>
-                    </div>
+                <div class="leaderboard-row">
+                  <div class="leaderboard-meta">
+                    <span class="leaderboard-name">${escapeHtml(s.name)}</span>
+                    <span class="leaderboard-count">${s.count} (${p}%)</span>
                   </div>
-                `;
+                  <div class="leaderboard-track"><div class="leaderboard-bar bar-dark" style="width:${p}%"></div></div>
+                </div>`;
               }).join('')}
-            </div>
-          `}
-        </div>
+            </div>`}
+        </section>
       </div>
     </div>
   `;
 
-  // Bind Jump-to-Overview buttons from Attention cards
-  container.querySelectorAll('.kpi-jump-btn').forEach(btn => {
+  container.querySelectorAll('[data-jump]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const jumpFilter = btn.getAttribute('data-jump') || 'all';
-      attentionFilter = jumpFilter;
+      attentionFilter = btn.getAttribute('data-jump') || 'all';
       currentMode = 'overview';
       renderApp();
+    });
+  });
+  container.querySelectorAll('[data-student]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedUnityID = btn.getAttribute('data-student');
+      attentionFilter = 'all';
+      searchTerm = '';
+      mobileShowDetail = true;
+      currentMode = 'overview';
+      renderApp();
+    });
+  });
+  container.querySelectorAll('[data-handled]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-handled');
+      const item = (dataService.getData().priorityQueue || []).find(q => q.unityID === id);
+      if (!item) return;
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      try {
+        for (const f of item.flags) {
+          await dataService.acknowledgeWarning(id, f.type, f.occurredAt, '', f.recordId);
+        }
+      } catch (err) {
+        console.error('Failed to mark handled:', err);
+        btn.disabled = false;
+        btn.textContent = 'Mark handled';
+      }
     });
   });
 }
@@ -847,7 +823,7 @@ function renderStudentEntry(container, students) {
               <input type="text" id="f-interview-company" class="form-input" list="entry-company-suggestions" placeholder="e.g. Lumarion Health, Marketing Analytics Analyst, Risk Management" required>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+            <div class="form-grid-2">
               <div class="form-group">
                 <label class="form-label">Interview Stage *</label>
                 <select id="f-interview-stage" class="form-input form-select">
@@ -910,7 +886,7 @@ function renderStudentEntry(container, students) {
               <label class="form-label">Final Offer Breakdown (Salary &amp; Bonus) *</label>
               <input type="text" id="f-accept-comp" class="form-input" placeholder="e.g. $102,000 base salary, $5,000 signing bonus">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+            <div class="form-grid-2">
               <div class="form-group">
                 <label class="form-label">Job Location (City/State)</label>
                 <input type="text" id="f-accept-location" class="form-input" placeholder="e.g. Philadelphia, PA">
@@ -1082,7 +1058,7 @@ function renderDatabaseRecords(container, data) {
     <div class="db-records-page">
       <div class="db-header-row">
         <div class="db-title-block">
-          <h2>SQLite Database Explorer &amp; Case Records</h2>
+          <h2>Database records</h2>
           <div class="db-title-sub">Direct access to live persistent database records and intervention logs</div>
         </div>
 
@@ -1104,10 +1080,11 @@ function renderDatabaseRecords(container, data) {
               type="text" 
               id="db-search-input" 
               class="search-input" 
+              aria-label="Search submissions by candidate, email or company"
               placeholder="Search candidate name, email, company..." 
               value="${escapeHtml(dbSearchTerm)}"
             />
-            <select id="db-type-select" class="form-input form-select" style="max-width: 160px;">
+            <select id="db-type-select" class="form-input form-select" aria-label="Filter by submission type" style="max-width: 160px;">
               <option value="all" ${dbTypeFilter === 'all' ? 'selected' : ''}>All Types</option>
               <option value="Interview" ${dbTypeFilter === 'Interview' ? 'selected' : ''}>Interview</option>
               <option value="Offer" ${dbTypeFilter === 'Offer' ? 'selected' : ''}>Offer</option>
@@ -1119,7 +1096,7 @@ function renderDatabaseRecords(container, data) {
           </button>
         </div>
 
-        <div class="db-table-container">
+        <div class="db-table-container" tabindex="0" role="region" aria-label="Submissions table, scrolls horizontally">
           <table class="db-table">
             <thead>
               <tr>
@@ -1211,7 +1188,7 @@ function renderDatabaseRecords(container, data) {
           </button>
         </div>
 
-        <div class="db-table-container">
+        <div class="db-table-container" tabindex="0" role="region" aria-label="Submissions table, scrolls horizontally">
           <table class="db-table">
             <thead>
               <tr>
@@ -1662,14 +1639,17 @@ function renderApp() {
   if (!container) return;
 
   const data = dataService.getData();
+  const focusKey = captureFocus();
 
   // Update navigation tab states
   document.querySelectorAll('.nav-tab').forEach(tab => {
     const mode = tab.getAttribute('data-mode');
     if (mode === currentMode) {
       tab.classList.add('active');
+      tab.setAttribute('aria-current', 'page');
     } else {
       tab.classList.remove('active');
+      tab.removeAttribute('aria-current');
     }
   });
 
@@ -1682,6 +1662,9 @@ function renderApp() {
   } else if (currentMode === 'database-records') {
     renderDatabaseRecords(container, data);
   }
+
+  enhance(container);
+  restoreFocus(focusKey);
 }
 
 // Global bootstrap
@@ -1723,6 +1706,7 @@ async function start() {
     }
   });
 
+  initModalA11y();
   dataService.subscribe(() => renderApp());
 
   await dataService.init();
