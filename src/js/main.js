@@ -4,6 +4,8 @@ let currentMode = 'overview'; // 'overview' | 'student-entry'
 let selectedUnityID = null;
 let entryUnityID = null;
 let searchTerm = '';
+let stageFilter = null; // one of the breakdown tile labels, or null
+let pipelineFilter = 'all'; // 'all' | 'Placed' | 'Has Offer' | 'Interviewing' | 'Seeking'
 let attentionFilter = 'all'; // 'all' | 'needs_attention' | 'meeting' | 'screening_polish' | 'withdraw_check' | 'stalled'
 
 function getStatusBadgeClass(status) {
@@ -69,6 +71,22 @@ function getNextSubmissionTimestamp(student) {
 /** ----------------------------------------------------
  *  MODE 1: CANDIDATE OVERVIEW (2-COLUMN MASTER-DETAIL)
  *  ---------------------------------------------------- */
+/** Maps a submission row to a breakdown tile label (or null for other interview types). */
+function getStageLabel(row) {
+  const type = (row['What are you reporting today?'] || '').trim();
+  const stage = (row['Which interview was this? '] || row['Which interview was this?'] || '').toLowerCase();
+  if (type === 'Interview') {
+    if (stage.includes('screen')) return 'Screenings';
+    if (stage.includes('first')) return '1st Round';
+    if (stage.includes('second')) return '2nd Round';
+    if (stage.includes('final')) return 'Final Round';
+    return null;
+  }
+  if (type === 'Offer') return 'Offers';
+  if (type === 'Acceptance') return 'Acceptances';
+  return null;
+}
+
 function renderOverview(container, data) {
   const students = data.students || [];
   const attentionCounts = data.attention || {
@@ -86,6 +104,8 @@ function renderOverview(container, data) {
       const matches = s.name.toLowerCase().includes(term) || s.unityID.toLowerCase().includes(term);
       if (!matches) return false;
     }
+
+    if (pipelineFilter !== 'all' && s.status !== pipelineFilter) return false;
 
     if (attentionFilter === 'needs_attention') {
       return s.attentionFlag !== null;
@@ -151,10 +171,51 @@ function renderOverview(container, data) {
     `;
   }
 
+  // Per-candidate stage breakdown chart
+  let stageChart = '';
+  if (selectedStudent) {
+    const counts = { Screenings: 0, '1st Round': 0, '2nd Round': 0, 'Final Round': 0, Offers: 0, Acceptances: 0 };
+    for (const r of (selectedStudent.history || [])) {
+      const label = getStageLabel(r);
+      if (label) counts[label]++;
+    }
+    const entries = Object.entries(counts);
+    // Furthest pipeline stage this candidate has reached
+    let reached = -1;
+    entries.forEach(([, n], i) => { if (n > 0) reached = i; });
+    const stepClass = (label, n, i) => [
+      'pstep',
+      n === 0 ? 'is-zero' : '',
+      i === reached && label !== 'Acceptances' ? 'is-current' : '',
+      label === stageFilter ? 'is-filter-active' : '',
+      label === 'Offers' ? 'step-offer' : '',
+      label === 'Acceptances' ? 'step-placed' : ''
+    ].filter(Boolean).join(' ');
+    stageChart = `
+      <div class="card stage-chart-card">
+        <h3 class="section-title">INTERVIEW &amp; OFFER BREAKDOWN <span class="pstep-hint">Click a step to filter the log below</span></h3>
+        <div class="pstep-row">
+          ${entries.map(([label, n], i) => `
+            ${i > 0 ? '<span class="pstep-arrow" aria-hidden="true">&rarr;</span>' : ''}
+            <button type="button" class="${stepClass(label, n, i)}" data-stage="${label}" aria-pressed="${label === stageFilter}" ${n === 0 ? 'disabled' : ''} title="${n === 0 ? 'No ' + label.toLowerCase() + ' logged' : 'Filter logged submissions to ' + label}">
+              <span class="pstep-num">${n}</span>
+              <span class="pstep-label">${label}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
   // Prepare raw activity stream (most recent first)
   let historyList = '<div class="empty-stream">No recruitment activities logged yet for this candidate.</div>';
   if (selectedStudent && selectedStudent.history && selectedStudent.history.length > 0) {
-    historyList = selectedStudent.history.map(row => {
+    const visibleHistory = stageFilter
+      ? selectedStudent.history.filter(r => getStageLabel(r) === stageFilter)
+      : selectedStudent.history;
+    historyList = visibleHistory.length === 0
+      ? '<div class="empty-stream">No logged submissions for this stage.</div>'
+      : visibleHistory.map(row => {
       const type = (row['What are you reporting today?'] || 'Submission').trim();
       const timestamp = row['Timestamp'] || '';
 
@@ -222,33 +283,27 @@ function renderOverview(container, data) {
             placeholder="Filter candidates..." 
             value="${escapeHtml(searchTerm)}"
           />
-          <div class="attention-filter-strip">
-            <button class="filter-chip ${attentionFilter === 'all' ? 'active' : ''}" data-filter="all">
-              All (${students.length})
-            </button>
-            <button class="filter-chip chip-attention ${attentionFilter === 'needs_attention' ? 'active' : ''}" data-filter="needs_attention">
-              Needs Attention (${attentionCounts.totalNeedsAttention || 0})
-            </button>
-            ${(attentionCounts.withdrawCheck || 0) > 0 ? `
-              <button class="filter-chip chip-warning ${attentionFilter === 'withdraw_check' ? 'active' : ''}" data-filter="withdraw_check">
-                Post-Acceptance (${attentionCounts.withdrawCheck})
-              </button>
-            ` : ''}
-            ${(attentionCounts.meetingWanted || 0) > 0 ? `
-              <button class="filter-chip chip-urgent ${attentionFilter === 'meeting' ? 'active' : ''}" data-filter="meeting">
-                Meetings (${attentionCounts.meetingWanted})
-              </button>
-            ` : ''}
-            ${(attentionCounts.screeningPolish || 0) > 0 ? `
-              <button class="filter-chip chip-warning ${attentionFilter === 'screening_polish' ? 'active' : ''}" data-filter="screening_polish">
-                Screening (${attentionCounts.screeningPolish})
-              </button>
-            ` : ''}
-            ${(attentionCounts.stalled || 0) > 0 ? `
-              <button class="filter-chip chip-muted ${attentionFilter === 'stalled' ? 'active' : ''}" data-filter="stalled">
-                Stalled (${attentionCounts.stalled})
-              </button>
-            ` : ''}
+          <div class="filter-dropdowns">
+            <label class="filter-select-label">
+              <span>Warning</span>
+              <select id="warning-filter" class="filter-select">
+                <option value="all" ${attentionFilter === 'all' ? 'selected' : ''}>All (${students.length})</option>
+                <option value="needs_attention" ${attentionFilter === 'needs_attention' ? 'selected' : ''}>Needs Attention (${attentionCounts.totalNeedsAttention || 0})</option>
+                <option value="withdraw_check" ${attentionFilter === 'withdraw_check' ? 'selected' : ''}>Post-Acceptance (${attentionCounts.withdrawCheck || 0})</option>
+                <option value="meeting" ${attentionFilter === 'meeting' ? 'selected' : ''}>Meetings (${attentionCounts.meetingWanted || 0})</option>
+                <option value="screening_polish" ${attentionFilter === 'screening_polish' ? 'selected' : ''}>Screening (${attentionCounts.screeningPolish || 0})</option>
+                <option value="stalled" ${attentionFilter === 'stalled' ? 'selected' : ''}>Stalled (${attentionCounts.stalled || 0})</option>
+              </select>
+            </label>
+            <label class="filter-select-label">
+              <span>Pipeline</span>
+              <select id="pipeline-filter" class="filter-select">
+                <option value="all" ${pipelineFilter === 'all' ? 'selected' : ''}>All stages</option>
+                ${[['Placed','Placed'],['Interviewing','Interviewing'],['Seeking','Seeking'],['Has Offer','Holding Offers']].map(([v,l]) => `
+                  <option value="${v}" ${pipelineFilter === v ? 'selected' : ''}>${l} (${students.filter(st => st.status === v).length})</option>
+                `).join('')}
+              </select>
+            </label>
           </div>
         </div>
 
@@ -406,12 +461,17 @@ function renderOverview(container, data) {
             </div>
           </div>
 
+          ${stageChart}
+
           <!-- ACCEPTED POSITION (Verbatim from CSV) -->
           ${acceptedCard}
 
           <!-- LOGGED SUBMISSIONS Stream -->
           <div class="card history-card">
-            <h3 class="section-title">LOGGED SUBMISSIONS (${selectedStudent.history ? selectedStudent.history.length : 0} events)</h3>
+            <h3 class="section-title">
+              LOGGED SUBMISSIONS (${stageFilter ? `${stageFilter}: ${selectedStudent.history.filter(r => getStageLabel(r) === stageFilter).length} of ` : ''}${selectedStudent.history ? selectedStudent.history.length : 0} events)
+              ${stageFilter ? '<button type="button" class="btn-clear-stage" id="clear-stage-filter">Clear filter ✕</button>' : ''}
+            </h3>
             <div class="stream-container">
               ${historyList}
             </div>
@@ -433,18 +493,33 @@ function renderOverview(container, data) {
     }
   });
 
-  // Attention filter chips click handler
-  container.querySelectorAll('.filter-chip').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      attentionFilter = btn.getAttribute('data-filter') || 'all';
+  // Warning & pipeline dropdown handlers
+  container.querySelector('#warning-filter')?.addEventListener('change', (e) => {
+    attentionFilter = e.target.value || 'all';
+    renderApp();
+  });
+  container.querySelector('#pipeline-filter')?.addEventListener('change', (e) => {
+    pipelineFilter = e.target.value || 'all';
+    renderApp();
+  });
+
+  // Breakdown tile -> filter logged submissions
+  container.querySelectorAll('.pstep').forEach(tile => {
+    tile.addEventListener('click', () => {
+      const stage = tile.getAttribute('data-stage');
+      stageFilter = stageFilter === stage ? null : stage;
       renderApp();
     });
+  });
+  container.querySelector('#clear-stage-filter')?.addEventListener('click', () => {
+    stageFilter = null;
+    renderApp();
   });
 
   // Candidate selection click handler
   container.querySelectorAll('.candidate-row').forEach(row => {
     row.addEventListener('click', () => {
+      if (selectedUnityID !== row.getAttribute('data-id')) stageFilter = null;
       selectedUnityID = row.getAttribute('data-id');
       renderApp();
     });
@@ -718,7 +793,7 @@ function renderAnalytics(container, data) {
           ${topCompanies.length === 0 ? `
             <div class="empty-stream">No employer offers recorded yet.</div>
           ` : `
-            <div class="leaderboard-list">
+            <div class="leaderboard-list leaderboard-scroll" tabindex="0" role="region" aria-label="Top hiring and offer partners, scrollable">
               ${topCompanies.map(c => `
                 <div class="leaderboard-row">
                   <div class="leaderboard-meta">
@@ -1023,6 +1098,7 @@ function renderStudentEntry(container, students) {
     try {
       await dataService.addSubmission(newRow);
       alert(`Event saved into database for ${stu.name}!`);
+      stageFilter = null;
       selectedUnityID = stu.unityID;
       currentMode = 'overview';
       renderApp();

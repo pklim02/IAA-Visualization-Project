@@ -512,8 +512,7 @@ class DataService {
 
     const topCompanies = Object.entries(companyTally)
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
+      .sort((a, b) => b.count - a.count);
 
     const topSources = Object.entries(sourceTally)
       .map(([name, count]) => ({ name, count }))
