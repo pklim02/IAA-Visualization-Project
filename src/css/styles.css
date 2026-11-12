@@ -2054,3 +2054,5 @@ button.pstep:focus-visible { outline: 2px solid var(--ncstate-red); outline-offs
 @media (max-width: 900px) {
   .emp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.stack-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }

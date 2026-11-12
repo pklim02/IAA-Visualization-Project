@@ -39,6 +39,13 @@ function esc(str) {
 const field = (r, a, b) => (r[a] || (b ? r[b] : '') || '').trim();
 const companyOf = (txt) => (txt || '').split(',')[0].trim();
 
+/** "Last, First" -> "First Last" */
+function displayName(raw) {
+  const t = (raw || '').trim();
+  const i = t.indexOf(',');
+  return i === -1 ? t : `${t.slice(i + 1).trim()} ${t.slice(0, i).trim()}`.trim();
+}
+
 function roundKey(stageRaw) {
   const s = (stageRaw || '').toLowerCase();
   if (s.includes('screen')) return 'screening';
@@ -68,7 +75,10 @@ function buildEmployerIndex(submissions) {
         unreportedSource: 0,
         notes: [],
         offers: 0,
-        acceptances: 0
+        acceptances: 0,
+        people: new Map(),     // email -> { name, rounds } for everyone who interviewed here
+        offerEmails: new Set(),
+        accepted: new Map()    // email -> { name, role }
       });
     }
     return map.get(name);
@@ -82,7 +92,12 @@ function buildEmployerIndex(submissions) {
       const e = get(name);
       e.interviews++;
       e.rounds[roundKey(field(r, 'Which interview was this? ', 'Which interview was this?'))]++;
-      e.candidates.add((r['Email Address'] || '').toLowerCase().trim());
+      const email = (r['Email Address'] || '').toLowerCase().trim();
+      e.candidates.add(email);
+      if (!e.people.has(email)) {
+        e.people.set(email, { name: displayName(r['Last, First Name']), rounds: { screening: 0, first: 0, second: 0, final: 0, other: 0 } });
+      }
+      e.people.get(email).rounds[roundKey(field(r, 'Which interview was this? ', 'Which interview was this?'))]++;
       const src = (r['How did you hear about the job?'] || '').trim();
       if (src) e.sources[src] = (e.sources[src] || 0) + 1;
       else e.unreportedSource++;
@@ -96,10 +111,19 @@ function buildEmployerIndex(submissions) {
       }
     } else if (type === 'Offer') {
       const name = companyOf(r['Please list the company and job title']);
-      if (name) get(name).offers++;
+      if (name) {
+        const e = get(name);
+        e.offers++;
+        e.offerEmails.add((r['Email Address'] || '').toLowerCase().trim());
+      }
     } else if (type === 'Acceptance') {
       const name = companyOf(field(r, 'Please list the company name and job title. ', 'Please list the company name and job title.'));
-      if (name) get(name).acceptances++;
+      if (name) {
+        const e = get(name);
+        e.acceptances++;
+        const jobTitle = field(r, 'Please list the company name and job title. ', 'Please list the company name and job title.').split(',').slice(1).join(',').trim();
+        e.accepted.set((r['Email Address'] || '').toLowerCase().trim(), { name: displayName(r['Last, First Name']), role: jobTitle });
+      }
     }
   }
   return [...map.values()];
@@ -148,6 +172,8 @@ export function renderEmployers(container, data, rerender) {
     .map(t => ({ label: t.label, count: substantive.filter(n => t.re.test(n.text)).length }))
     .filter(t => t.count > 0)
     .sort((a, b) => b.count - a.count);
+  // People who interviewed here and accepted
+  const acceptedPeople = [...emp.accepted.values()];
   const maxTheme = themeRows.length ? themeRows[0].count : 1;
   const roundLabel = (k) => ROUNDS.find(r => r.key === k)?.label || 'Other';
 
@@ -261,6 +287,21 @@ export function renderEmployers(container, data, rerender) {
             </div>
           `}
         </div>
+      </div>
+
+      <!-- Who interviewed and accepted -->
+      <div class="card analytics-card">
+        <h3 class="section-title">Who Interviewed &amp; Accepted</h3>
+        ${acceptedPeople.length === 0 ? `
+          <div class="empty-stream">No one has logged an acceptance at this employer yet.</div>
+        ` : `
+          <div class="emp-notes leaderboard-scroll" tabindex="0" role="region" aria-label="People who accepted, scrollable">
+            ${acceptedPeople.map(a => `
+              <div class="emp-note">
+                <div class="emp-note-meta"><strong>${esc(a.name)}</strong><span class="stream-date">${esc(a.role || 'Role not recorded')}</span></div>
+              </div>`).join('')}
+          </div>
+        `}
       </div>
 
     </div>
