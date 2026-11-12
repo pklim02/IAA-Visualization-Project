@@ -1,4 +1,5 @@
 import { dataService } from './dataService.js';
+import { renderEmployers } from './employers.js';
 
 let currentMode = 'overview'; // 'overview' | 'student-entry'
 let selectedUnityID = null;
@@ -1753,6 +1754,8 @@ function renderApp() {
     renderOverview(container, data);
   } else if (currentMode === 'analytics') {
     renderAnalytics(container, data);
+  } else if (currentMode === 'employers') {
+    renderEmployers(container, data, renderApp);
   } else if (currentMode === 'student-entry') {
     renderStudentEntry(container, data.students);
   } else if (currentMode === 'database-records') {
